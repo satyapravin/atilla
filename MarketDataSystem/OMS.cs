@@ -8,9 +8,31 @@ using System.Text;
 using System.Threading;
 using Bitmex.NET.Models;
 using Bitmex.NET.Dtos.Socket;
+using System.Threading.Tasks;
 
 namespace Exchange
 {
+    public static class TaskExtensions
+    {
+        public static async Task<TResult> TimeoutAfter<TResult>(this Task<TResult> task, TimeSpan timeout)
+        {
+
+            using (var timeoutCancellationTokenSource = new CancellationTokenSource())
+            {
+
+                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
+                if (completedTask == task)
+                {
+                    timeoutCancellationTokenSource.Cancel();
+                    return await task;  // Very important in order to propagate exceptions
+                }
+                else
+                {
+                    throw new TimeoutException("The operation has timed out.");
+                }
+            }
+        }
+    }
     public enum OrderType 
     { 
         NONE,
@@ -106,20 +128,35 @@ namespace Exchange
             try
             {
                 var response = restService.Execute(BitmexApiUrls.Order.PostOrder, order);
-                response.Wait(5000);
-
-                if (response.IsCompleted)
+                response = TaskExtensions.TimeoutAfter(response, new TimeSpan(0, 0, 5));
+                var dto = response.Result.Result;
+                var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
+                cache.Reconcile(dto);
+            }
+            catch (TimeoutException e)
+            {
+                log.Error("new order request timed out in 5 seconds", e);
+            }
+            catch (BitmexApiException e)
+            {
+                log.Error("New order failed", e);
+                if (e.StatusCode != 503)
                 {
-                    var dto = response.Result.Result;
-                    var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
-                    cache.Reconcile(dto);
-                }
-                else
-                {
-                    log.Error("new order request timed out in 5 seconds");
+                    throw;
                 }
             }
-            catch(Exception e)
+            catch (AggregateException e)
+            {
+                log.Error("new order failed", e);
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
             {
                 log.Error("new order request failed", e);
             }
@@ -134,11 +171,80 @@ namespace Exchange
 
             try
             {
-                restService.Execute(BitmexApiUrls.Order.DeleteOrder, order);
+                var result = restService.Execute(BitmexApiUrls.Order.DeleteOrder, order);
+                result = TaskExtensions.TimeoutAfter(result, new TimeSpan(0, 0, 5));
             }
-            catch(Exception e)
+            catch (TimeoutException e)
             {
-                log.Error("Cancel order failed", e);
+                log.Error("Cancel timeout", e);
+            }
+            catch (BitmexApiException e)
+            {
+                log.Error("Cancel order failed with bitmexException", e);
+
+                if (e.StatusCode != 503)
+                {
+                    throw;
+                }
+            }
+            catch (AggregateException e)
+            {
+                log.Error("cancel order failed", e);
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
+            {
+                log.Error("Cancel order failed with general exception", e);
+                throw;
+            }
+        }
+
+        public void CancelAll()
+        {
+            while (true)
+            {
+                try
+                {
+                    OrderAllDELETERequestParams req = new OrderAllDELETERequestParams();
+                    var result = restService.Execute(BitmexApiUrls.Order.DeleteOrderAll, req);
+                    result = TaskExtensions.TimeoutAfter(result, new TimeSpan(0, 0, 10));
+                    return;
+                }
+                catch (TimeoutException e)
+                {
+                    log.Error("CancelAll timed out", e);
+                    return;
+                }
+                catch (BitmexApiException e)
+                {
+                    log.Error("CancelAll failed with bitmexException", e);
+                    if (e.StatusCode != 503)
+                    {
+                        throw;
+                    }
+                }
+                catch (AggregateException e)
+                {
+                    log.Error("Cancel all failed", e);
+                    e.Handle(inner =>
+                    {
+                        if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                            return true;
+                        else
+                            return false;
+                    });
+                }
+                catch (Exception e)
+                {
+                    log.Error("Cancel all failed", e);
+                    throw;
+                }
             }
         }
 
@@ -176,30 +282,46 @@ namespace Exchange
             try
             {
                 var response = restService.Execute(BitmexApiUrls.Order.PutOrder, order);
-                response.Wait(5000);
-
-                if (response.IsCompleted)
+                response = TaskExtensions.TimeoutAfter(response, new TimeSpan(0, 0, 5));
+                var dto = response.Result.Result;
+                var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
+                cache.Reconcile(dto);
+            }
+            catch (TimeoutException e)
+            {
+                log.Error("Amend timed out", e);
+            }
+            catch (BitmexApiException e)
+            {
+                log.Error("Amend order failed with bitmexException", e);
+                if (e.StatusCode != 503)
                 {
-                    var dto = response.Result.Result;
-                    var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
-                    cache.Reconcile(dto);
-                }
-                else
-                {
-                    log.Error("Amend order timed out");
+                    throw;
                 }
             }
-            catch(Exception)
+            catch (AggregateException e)
             {
-                log.Error("Amend order failed");
+                log.Error("Amend order failed", e);
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
+            {
+                log.Error("Amend order failed with general exception", e);
+                throw e;
             }
         }
 
         public void NewOrder(List<OrderRequest> reqs)
         {
             List<OrderPOSTRequestParams> orders = new List<OrderPOSTRequestParams>();
-            
-            foreach(var req in reqs)
+
+            foreach (var req in reqs)
             {
                 orders.Add(newOrderRequestToParam(req));
             }
@@ -210,26 +332,41 @@ namespace Exchange
             try
             {
                 var response = restService.Execute(BitmexApiUrls.Order.PostOrderBulk, order);
-                response.Wait(5000);
+                response = TaskExtensions.TimeoutAfter(response, new TimeSpan(0, 0, 5));
+                var dtos = response.Result.Result;
 
-                if (response.IsCompleted)
+                foreach (var dto in dtos)
                 {
-                    var dtos = response.Result.Result;
-                    
-                    foreach(var dto in dtos)
-                    {
-                        var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
-                        cache.Reconcile(dto);
-                    }
-                }
-                else
-                {
-                    log.Error("new bulk order timed out");
+                    var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
+                    cache.Reconcile(dto);
                 }
             }
-            catch(Exception e)
+            catch (TimeoutException e)
             {
-                log.Error("New bulk order failed", e);
+                log.Error("NewOrder bulk timed out", e);
+            }
+            catch (BitmexApiException e)
+            {
+                log.Error("New order failed with bitmexException", e);
+                if (e.StatusCode != 503)
+                {
+                    throw;
+                }
+            }
+            catch (AggregateException e)
+            {
+                log.Error("new bulk order failed", e);
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
+            {
+                log.Error("New bulk order failed with general exception", e);
             }
         }
 
@@ -237,7 +374,7 @@ namespace Exchange
         {
             List<OrderPUTRequestParams> orders = new List<OrderPUTRequestParams>();
 
-            foreach(var req in reqs)
+            foreach (var req in reqs)
             {
                 orders.Add(amendOrderRequestToParam(req));
             }
@@ -248,24 +385,41 @@ namespace Exchange
             try
             {
                 var response = restService.Execute(BitmexApiUrls.Order.PutOrderBulk, order);
-                response.Wait(5000);
-                if (response.IsCompleted)
+                response = TaskExtensions.TimeoutAfter(response, new TimeSpan(0, 0, 5));
+                var dtos = response.Result.Result;
+                foreach (var dto in dtos)
                 {
-                    var dtos = response.Result.Result;
-                    foreach(var dto in dtos)
-                    {
-                        var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
-                        cache.Reconcile(dto);
-                    }
-                }
-                else
-                {
-                    log.Error("Amend bulk order timeout");
+                    var cache = ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
+                    cache.Reconcile(dto);
                 }
             }
-            catch(Exception e)
+            catch (TimeoutException e)
+            {
+                log.Error("Amend bulk order timedout", e);
+            }
+            catch (BitmexApiException e)
+            {
+                log.Error("Amend bulk order failed with bitmexException", e);
+                if (e.StatusCode != 503)
+                {
+                    throw;
+                }
+            }
+            catch (AggregateException e)
             {
                 log.Error("Amend bulk order failed", e);
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException && ((BitmexApiException)inner).StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
+            {
+                log.Error("Amend bulk order failed with general exception", e);
+                throw e;
             }
         }
 
@@ -303,7 +457,7 @@ namespace Exchange
                     return new List<OrderDto>();
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 log.Error("GetOpenOrders failed", e);
             }
@@ -315,11 +469,11 @@ namespace Exchange
         {
             log.Info(string.Format("Order notification received {0}", action.ToString()));
 
-            foreach(var dt in dtos)
+            foreach (var dt in dtos)
             {
                 if (!string.IsNullOrEmpty(dt.OrderId))
                 {
-                    log.Info(dt.OrderId);
+                    log.Info(string.Format("{0}, {1}", dt.OrderId, dt.OrdStatus));
                     var cache = ordersBySymbol.GetOrAdd(dt.Symbol, new OrderCache());
                     cache.Reconcile(dt);
                 }

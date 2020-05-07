@@ -50,7 +50,7 @@ namespace Exchange
         private bool IsActive(OrderDto dto)
         {
             var status = dto.OrdStatus;
-            return status != "Canceled" && status != "DoneForDay" && status != "Stopped" && status != "Rejected" && status != "Expired";
+            return status != "Filled" && status != "Canceled" && status != "DoneForDay" && status != "Stopped" && status != "Rejected" && status != "Expired";
         }
     }
 }

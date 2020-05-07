@@ -85,6 +85,34 @@ namespace Exchange
             }
         }
 
+        public PositionDto QueryPositionFromExchange(string symbol)
+        {
+            try
+            {
+                log.Info(string.Format("Querying for {0} position", symbol));
+                var param = new PositionGETRequestParams();
+                param.Filter = new Dictionary<string, string>();
+                param.Filter["symbol"] = symbol;
+                var task = restService.Execute(BitmexApiUrls.Position.GetPosition, param);
+                task.Wait(5000);
+
+                if (task.IsCompleted)
+                {
+                    return task.Result.Result.First();
+                }
+                else
+                {
+                    log.Error(string.Format("Query for {0} position timedout", symbol));
+                }
+            }
+            catch(Exception e)
+            {
+                log.Fatal(string.Format("Query for {0} position excepted", symbol), e);
+            }
+
+            return null;
+        }
+
         private IEnumerable<PositionDto> GetPositions()
         {
             try
@@ -143,7 +171,7 @@ namespace Exchange
                     {
                         symbol = dto.Symbol,
                         currentQty = dto.CurrentQty,
-                        avgPrice = dto.AvgEntryPrice.Value
+                        avgPrice = dto.AvgEntryPrice.HasValue ? dto.AvgEntryPrice.Value : 0
                     };
 
                     subscribers[dto.Symbol].ForEach(action => action(update));

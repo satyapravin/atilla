@@ -16,12 +16,16 @@ namespace Atilla
         HedgingService btcService;
         string ethInstr;
         string btcInstr;
+        string ethFutureInstr;
+        string btcFutureInstr;
         private ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>> rebalancePeriods;
         private Timer timer;
         private int period;
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(Rebalancer));
 
-        public Rebalancer(int period, BitmexExchange exch, string ethSym, string btcSym, HedgingService eth, HedgingService btc, 
+        public Rebalancer(int period, BitmexExchange exch, 
+            string ethSym, string btcSym,  string ethFuture, string btcFuture,
+            HedgingService eth, HedgingService btc, 
             ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>> rebalances)
         {
             this.period = period;
@@ -29,7 +33,9 @@ namespace Atilla
             ethService = eth;
             btcService = btc;
             ethInstr = ethSym;
+            ethFutureInstr = ethFuture;
             btcInstr = btcSym;
+            btcFutureInstr = btcFuture;
             rebalancePeriods = rebalances;
         }
 
@@ -73,7 +79,16 @@ namespace Atilla
             try
             {
                 var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
-                var btcP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
+                var ethFP = exchange.MarketDataSystem.GetBidAsk(ethFutureInstr);
+                var xbtP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
+                var xbtFP = exchange.MarketDataSystem.GetBidAsk(btcFutureInstr);
+
+
+                var ethBid = ethFP.Item1 < ethP.Item1 ? ethFP.Item1 : ethP.Item1;
+                var ethAsk = ethFP.Item2 > ethP.Item2 ? ethFP.Item2 : ethP.Item2;
+                var xbtBid = xbtFP.Item1 < xbtP.Item1 ? xbtFP.Item1 : xbtP.Item1;
+                var xbtAsk = xbtFP.Item2 > xbtP.Item2 ? xbtFP.Item2 : xbtP.Item2;
+
                 decimal ethQty = 0;
                 decimal btcQty = 0;
                 Tuple<decimal, decimal, decimal> retval = null;
@@ -81,8 +96,8 @@ namespace Atilla
 
                 if (rebalances.Item1 < 0)
                 {
-                    ethQty = -Math.Round(rebalances.Item1 / btcP.Item1 / 0.000001m);
-                    btcQty = Math.Round(rebalances.Item1 * ethP.Item2);
+                    ethQty = -Math.Round(rebalances.Item1 / xbtBid / 0.000001m);
+                    btcQty = Math.Round(rebalances.Item1 * ethAsk);
                     retval = new Tuple<decimal, decimal, decimal>(rebalances.Item1, ethQty, btcQty);
                     ethService.Add(ethQty - rebalances.Item2);
                     btcService.Add(btcQty - rebalances.Item3);

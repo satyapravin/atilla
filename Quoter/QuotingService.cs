@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Bitmex.NET;
 using Bitmex.NET.Dtos;
 using Exchange;
 
@@ -106,7 +107,7 @@ namespace Quoter
             };
         }
 
-        private OrderRequest CreateNewRequest(string symbol, decimal q, decimal p, OrderSide side)
+        private OrderRequest CreateNewRequest(string symbol, decimal q, decimal p, OrderSide side, bool active=false)
         {
             return new OrderRequest()
             {
@@ -114,16 +115,16 @@ namespace Quoter
                 quantity = q,
                 price = p,
                 side = side,
-                isPassive = true,
+                isPassive = !active,
                 orderType = OrderType.NEW_LIMIT_ORDER
             };
         }
 
-        private void PlaceQuote(decimal buyQ, decimal buyP, decimal sellQ, decimal sellP)
+        private void PlaceQuote(decimal buyQ, decimal buyP, decimal sellQ, decimal sellP, bool limitSell)
         {
             var reqs = new List<OrderRequest>();
             reqs.Add(CreateNewRequest(symbol, buyQ, buyP, OrderSide.BUY));
-            reqs.Add(CreateNewRequest(symbol, sellQ, sellP, OrderSide.SELL));
+            reqs.Add(CreateNewRequest(symbol, sellQ, sellP, OrderSide.SELL, limitSell));
             log.Info(string.Format("Quoter quoting at bid {0} {1}, ask {2} {3}", buyQ, buyP, sellQ, sellP));
             exchange.OrderSystem.NewOrder(reqs);
         }
@@ -175,7 +176,7 @@ namespace Quoter
             {
                 foreach (var req in reqs)
                 {
-                    log.Info(string.Format("quote updated to {0} {1} {2}", req.side == OrderSide.BUY ? "Bid" : "Ask", 
+                    log.Info(string.Format("quote for {0} updated to {1} {2}", req.orderId, 
                                             req.quantity, req.price));
                 }
 
@@ -209,14 +210,20 @@ namespace Quoter
 
                         decimal bidPrice = decimal.Floor((bidRef - bidRef * bidSpreadFromMid) * decimalRounder) / decimalRounder;
                         decimal askPrice = decimal.Ceiling((askRef + askRef * askSpreadFromMid) * decimalRounder) / decimalRounder;
+
+                        log.Info(string.Format("Computed Bid/Ask={0}/{1}", bidPrice, askPrice));
                         var bidAsk = exchange.MarketDataSystem.GetBidAsk(symbol);
 
+                        bool limitSell = false;
                         if (bidAsk.Item1 < bidPrice)
-                            bidPrice = bidAsk.Item2 - 1.0m / decimalRounder;
+                            bidPrice = bidAsk.Item1;
 
                         if (bidAsk.Item2 > askPrice)
-                            askPrice = bidAsk.Item1 + 1.0m / decimalRounder;
+                        {
+                            askPrice = bidAsk.Item2;
+                        }
 
+                        log.Info(string.Format("Quoting Bid/Ask={0}/{1}", bidPrice, askPrice));
                         var orders = exchange.OrderSystem.GetOpenOrders(symbol);
 
                         OrderDto buyOrder = null;
@@ -226,12 +233,16 @@ namespace Quoter
                         {
                             throw new ApplicationException("More than two quote orders found");
                         }
-
+                        else if (orders.Count() == 2)
+                        {
+                            if (orders[0].Side == orders[1].Side)
+                                throw new ApplicationException("Both orders have same side");
+                        }
                         foreach (var o in orders)
                         {
                             if (o.Side == "Buy")
                                 buyOrder = o;
-                            else
+                            else if (o.Side == "Sell")
                                 sellOrder = o;
                         }
 
@@ -279,7 +290,7 @@ namespace Quoter
                         else if (bidSize > 0 && askSize > 0)
                         {
                             log.Info("No orders found place quotes");
-                            PlaceQuote(bidSize, bidPrice, askSize, askPrice);
+                            PlaceQuote(bidSize, bidPrice, askSize, askPrice, limitSell);
                         }
                         else if (bidSize > 0)
                         {
@@ -293,13 +304,25 @@ namespace Quoter
                         }
                     }
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
-                    log.Fatal("Quoter died", e);
-                    stop = true;
+                    log.Fatal("Quoter crashed", e);
+                    CancelAllOrders();
+                    break;
                 }
+                Thread.Sleep(2000);
+            }
+        }
 
-                Thread.Sleep(3000);
+        private void CancelAllOrders()
+        {
+            try
+            {
+                exchange.OrderSystem.CancelAll();
+            }
+            catch (Exception ex)
+            {
+                log.Fatal("Cancel all failed", ex);
             }
         }
     }

@@ -17,7 +17,9 @@ namespace Atilla
         BitmexExchange exchange;
         string ethbtcInstr;
         string ethInstr;
+        string ethFutureInstr;
         string btcInstr;
+        string btcFutureInstr;
         volatile bool stop = false;
         QuotingService quoter;
         HedgingService ethHedger;
@@ -28,12 +30,15 @@ namespace Atilla
         object positionLocker = new object();
         ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>> rebalanceTimes = new ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>>();
 
-        public CryptoQuantoCorrStrategy(BitmexExchange exch, string ethbtc, string eth, string btc)
+        public CryptoQuantoCorrStrategy(BitmexExchange exch, string ethbtc, string eth, 
+            string ethfut, string btc, string btcfut)
         {
             exchange = exch;
             ethbtcInstr = ethbtc;
             ethInstr = eth;
             btcInstr = btc;
+            ethFutureInstr = ethfut;
+            btcFutureInstr = btcfut;
         }
 
         private void OnPositionUpdate(PositionUpdate update)
@@ -44,9 +49,10 @@ namespace Atilla
             {
                 if (update.symbol == ethbtcInstr && oldQty != update.currentQty)
                 {
-                    log.Info("Quantity changed");
+                    log.Info("ETHBTC Quantity changed");
                     var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
                     var btcP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
+                    
                     decimal ethQty = 0;
                     decimal btcQty = 0;
 
@@ -87,8 +93,8 @@ namespace Atilla
         {
             log.Info("Strategy started");
             quoter = new QuotingService(exchange, ethbtcInstr, 5);
-            ethHedger = new HedgingService(exchange, ethInstr);
-            btcHedger = new HedgingService(exchange, btcInstr);
+            ethHedger = new HedgingService(exchange, ethInstr, ethFutureInstr);
+            btcHedger = new HedgingService(exchange, btcInstr, btcFutureInstr);
 
             exchange.PositionSubscribe(ethbtcInstr, OnPositionUpdate);
             exchange.Start();
@@ -100,7 +106,7 @@ namespace Atilla
             Thread.Sleep(1000);
             quoter.Start();
             Thread.Sleep(2000);
-            rebalancer = new Rebalancer(3600000, exchange, ethInstr, btcInstr, ethHedger, btcHedger, rebalanceTimes);
+            rebalancer = new Rebalancer(3600000, exchange, ethInstr, btcInstr, ethFutureInstr, btcFutureInstr, ethHedger, btcHedger, rebalanceTimes);
             backGroundThread = new Thread(new ThreadStart(Run));
             backGroundThread.Start();
             rebalancer.Start();
@@ -113,30 +119,42 @@ namespace Atilla
             {
                 try
                 {
-                    decimal baseQuantity = 4;
+                    decimal baseQuantity = 5;
                     var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
+                    var ethFP = exchange.MarketDataSystem.GetBidAsk(ethFutureInstr);
                     var xbtP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
-                    var ethbtcBid = ethP.Item1 / xbtP.Item2;
-                    var ethbtcAsk = ethP.Item2 / xbtP.Item1;
-                    decimal spread = 0.0015m;
-                    var pos = exchange.PositionSystem.GetPosition(ethbtcInstr);
+                    var xbtFP = exchange.MarketDataSystem.GetBidAsk(btcFutureInstr);
+                    log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethInstr, ethP.Item1, ethP.Item2, btcInstr, xbtP.Item1, xbtP.Item2));
+                    log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethFutureInstr, ethFP.Item1, ethFP.Item2, btcFutureInstr, xbtFP.Item1, xbtFP.Item2));
 
-                    if (pos == null)
+                    var ethBid = ethFP.Item1 < ethP.Item1 ? ethFP.Item1 : ethP.Item1;
+                    var ethAsk = ethFP.Item2 > ethP.Item2 ? ethFP.Item2 : ethP.Item2;
+                    var xbtBid = xbtFP.Item1 < xbtP.Item1 ? xbtFP.Item1 : xbtP.Item1;
+                    var xbtAsk = xbtFP.Item2 > xbtP.Item2 ? xbtFP.Item2 : xbtP.Item2;
+
+                    var ethbtcAsk = ethBid / xbtAsk;
+                    var ethbtcBid = ethBid / xbtBid;
+
+                    decimal spread = 0.0016m * 20;
+                    var pos = exchange.PositionSystem.GetPosition(ethbtcInstr);
+                    decimal posQty = 0;
+
+                    if (pos != null)
                     {
-                        Thread.Sleep(2000);
-                        continue;
+                        posQty = pos.CurrentQty;
                     }
-                    if (pos.CurrentQty == 0)
+
+                    if (posQty == 0)
                     {
-                        quoter.SetQuote(baseQuantity, baseQuantity, spread, spread, ethbtcBid, ethbtcAsk);
+                        quoter.SetQuote(baseQuantity, baseQuantity, spread, 0, ethbtcBid, ethbtcAsk);
                     }
-                    else if (pos.CurrentQty > 0)
+                    else if (posQty > 0)
                     {
-                        quoter.SetQuote(Math.Max(0, baseQuantity - pos.CurrentQty), baseQuantity, spread, spread * 2, ethbtcBid, ethbtcAsk);
+                        quoter.SetQuote(Math.Max(0, baseQuantity - Math.Abs(posQty)), baseQuantity, spread, 0, ethbtcBid, ethbtcAsk);
                     }
                     else
                     {
-                        quoter.SetQuote(baseQuantity, Math.Max(0, baseQuantity - Math.Abs(pos.CurrentQty)), spread * 2, spread, ethbtcBid, ethbtcAsk);
+                        quoter.SetQuote(baseQuantity, Math.Max(0, baseQuantity - Math.Abs(posQty)), spread, 0, ethbtcBid, ethbtcAsk);
 
                     }
                 }
