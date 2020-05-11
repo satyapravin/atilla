@@ -2,12 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Configuration;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Quoter;
-using Hedger;
-using System.Threading;
 
 namespace Atilla
 {
@@ -40,9 +35,11 @@ namespace Atilla
                 hours.Add(4);
                 hours.Add(12);
                 hours.Add(20);
-                BitmexExchange bitmexExchange = new BitmexExchange(settings["KEY"],
-                    settings["SECRET"], bool.Parse(settings["PROD"]), symbols, indices, funding, hours);
-                CryptoQuantoCorrStrategy strategy = new CryptoQuantoCorrStrategy(bitmexExchange, ethbtc, eth, ethfuture, btc, btcfuture);
+                IExchangeFactory factory = new ExchangeFactory();
+                IExchange exchange = factory.CreateExchange(settings["KEY"], settings["SECRET"], 
+                                     bool.Parse(settings["PROD"]), symbols, indices, funding, hours);
+                IQuotingServiceFactory qfactory = new QuotingServiceFactory();
+                CryptoQuantoCorrStrategy strategy = new CryptoQuantoCorrStrategy(exchange, qfactory, ethbtc, eth, ethfuture, btc, btcfuture);
                 strategy.Start();
                 strategy.Join();
                 

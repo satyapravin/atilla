@@ -8,14 +8,18 @@ using System.Collections.Concurrent;
 
 namespace Exchange
 {
-    public class FundingFeed
+    class FundingFeed : IFundingFeed
     {
+        #region private members
         IBitmexApiService bitmexService;
         HashSet<string> instruments;
         List<int> fundingHours;
         Timer timer;
         ConcurrentDictionary<string, decimal> indicativeFundingRates = new ConcurrentDictionary<string, decimal>();
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(FundingFeed));
+        #endregion
+
+        #region public methods
         public FundingFeed(IBitmexApiService svc, HashSet<string> instruments, List<int> fundingHours)
         {
             bitmexService = svc;
@@ -87,6 +91,9 @@ namespace Exchange
             log.Info("FundingFeed stopped");
         }
 
+        #endregion
+
+        #region private methods
         private void onElapsed(object state)
         {
             log.Info("Funding feed timer elapsed");
@@ -131,5 +138,6 @@ namespace Exchange
                 log.Error("Funding rate fetch failure", e);
             }
         }
+        #endregion
     }
 }

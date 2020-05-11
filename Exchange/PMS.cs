@@ -18,15 +18,18 @@ namespace Exchange
         public decimal avgPrice;
     }
 
-    public class PMS
+    public class PMS : IPMS
     {
+        #region private members
         private readonly IBitmexApiService restService;
         private readonly IBitmexApiSocketService socketService;
         private Timer timer;
         private ConcurrentDictionary<string, PositionDto> positionsBySymbol = new ConcurrentDictionary<string, PositionDto>();
         private Dictionary<string, List<Action<PositionUpdate>>> subscribers = new Dictionary<string, List<Action<PositionUpdate>>>();
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(PMS));
+        #endregion
 
+        #region public interface
         public PMS(IBitmexApiSocketService socketSvc, IBitmexApiService restSvc)
         {
             socketService = socketSvc;
@@ -75,16 +78,6 @@ namespace Exchange
             return null;
         }
 
-        private void OnElapsed(object state)
-        {
-            log.Info("PMS timer elapsed");
-            var positions = GetPositions();
-            foreach (var pos in positions)
-            {
-                AddOrUpdate(pos);
-            }
-        }
-
         public PositionDto QueryPositionFromExchange(string symbol)
         {
             try
@@ -111,6 +104,18 @@ namespace Exchange
             }
 
             return null;
+        }
+        #endregion
+
+        #region private members
+        private void OnElapsed(object state)
+        {
+            log.Info("PMS timer elapsed");
+            var positions = GetPositions();
+            foreach (var pos in positions)
+            {
+                AddOrUpdate(pos);
+            }
         }
 
         private IEnumerable<PositionDto> GetPositions()
@@ -194,5 +199,6 @@ namespace Exchange
                 }
             }
         }
+        #endregion
     }
 }

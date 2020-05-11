@@ -12,59 +12,17 @@ using System.Threading.Tasks;
 
 namespace Exchange
 {
-    public static class TaskExtensions
+    class OMS : IOMS
     {
-        public static async Task<TResult> TimeoutAfter<TResult>(this Task<TResult> task, TimeSpan timeout)
-        {
-
-            using (var timeoutCancellationTokenSource = new CancellationTokenSource())
-            {
-
-                var completedTask = await Task.WhenAny(task, Task.Delay(timeout, timeoutCancellationTokenSource.Token));
-                if (completedTask == task)
-                {
-                    timeoutCancellationTokenSource.Cancel();
-                    return await task;  // Very important in order to propagate exceptions
-                }
-                else
-                {
-                    throw new TimeoutException("The operation has timed out.");
-                }
-            }
-        }
-    }
-    public enum OrderType 
-    { 
-        NONE,
-        NEW_MARKET_ORDER, 
-        NEW_LIMIT_ORDER,
-        CANCEL_ORDER,
-        AMEND_PRICE_ONLY, 
-        AMEND_QUANTITY_ONLY, 
-        AMEND_PRICE_AND_QUANTITY 
-    };
-    
-    public enum OrderSide {  BUY, SELL };
-
-    public struct OrderRequest
-    {
-        public string symbol;
-        public string orderId;
-        public decimal quantity;
-        public decimal price;
-        public OrderType orderType;
-        public OrderSide side;
-        public bool isPassive;
-    }
-
-    public class OMS
-    {
+        #region private members
         private readonly IBitmexApiService restService;
         private readonly IBitmexApiSocketService socketService;
         private Timer timer;
         private ConcurrentDictionary<string, OrderCache> ordersBySymbol = new ConcurrentDictionary<string, OrderCache>();
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(OMS));
+        #endregion
 
+        #region public methods
         public OMS(IBitmexApiSocketService socketSvc, IBitmexApiService restSvc)
         {
             socketService = socketSvc;
@@ -90,37 +48,6 @@ namespace Exchange
             log.Info("OMS stopped");
         }
 
-        private OrderPOSTRequestParams newOrderRequestToParam(OrderRequest req)
-        {
-            OrderPOSTRequestParams order = new OrderPOSTRequestParams
-            {
-                Symbol = req.symbol,
-                Side = req.side == OrderSide.BUY ? "Buy" : "Sell",
-                OrderQty = req.quantity,
-            };
-
-            if (req.orderType == OrderType.NEW_LIMIT_ORDER)
-            {
-                order.Price = req.price;
-                order.OrdType = "Limit";
-            }
-            else if (req.orderType == OrderType.NEW_MARKET_ORDER)
-            {
-                order.OrdType = "Market";
-            }
-            else
-            {
-                log.Error(string.Format("invalid order type {0}", req.orderType));
-                throw new ApplicationException("Invalid order type for new order");
-            }
-
-            if (req.isPassive)
-            {
-                order.ExecInst = "ParticipateDoNotInitiate";
-            }
-
-            return order;
-        }
 
         public void NewOrder(OrderRequest req)
         {
@@ -248,34 +175,6 @@ namespace Exchange
             }
         }
 
-        private OrderPUTRequestParams amendOrderRequestToParam(OrderRequest req)
-        {
-            OrderPUTRequestParams order = new OrderPUTRequestParams()
-            {
-                OrderID = req.orderId,
-            };
-
-            if (req.orderType == OrderType.AMEND_PRICE_AND_QUANTITY)
-            {
-                order.Price = req.price;
-                order.OrderQty = req.quantity;
-            }
-            else if (req.orderType == OrderType.AMEND_PRICE_ONLY)
-            {
-                order.Price = req.price;
-            }
-            else if (req.orderType == OrderType.AMEND_QUANTITY_ONLY)
-            {
-                order.OrderQty = req.quantity;
-            }
-            else
-            {
-                log.Fatal(string.Format("Invalid order type for amend {0}", req.orderType));
-                throw new ApplicationException("Invalid ordertype for Amend");
-            }
-
-            return order;
-        }
         public void Amend(OrderRequest req)
         {
             var order = amendOrderRequestToParam(req);
@@ -423,6 +322,70 @@ namespace Exchange
             }
         }
 
+        #endregion
+
+        #region private methods
+        private OrderPOSTRequestParams newOrderRequestToParam(OrderRequest req)
+        {
+            OrderPOSTRequestParams order = new OrderPOSTRequestParams
+            {
+                Symbol = req.symbol,
+                Side = req.side == OrderSide.BUY ? "Buy" : "Sell",
+                OrderQty = req.quantity,
+            };
+
+            if (req.orderType == OrderType.NEW_LIMIT_ORDER)
+            {
+                order.Price = req.price;
+                order.OrdType = "Limit";
+            }
+            else if (req.orderType == OrderType.NEW_MARKET_ORDER)
+            {
+                order.OrdType = "Market";
+            }
+            else
+            {
+                log.Error(string.Format("invalid order type {0}", req.orderType));
+                throw new ApplicationException("Invalid order type for new order");
+            }
+
+            if (req.isPassive)
+            {
+                order.ExecInst = "ParticipateDoNotInitiate";
+            }
+
+            return order;
+        }
+        
+        private OrderPUTRequestParams amendOrderRequestToParam(OrderRequest req)
+        {
+            OrderPUTRequestParams order = new OrderPUTRequestParams()
+            {
+                OrderID = req.orderId,
+            };
+
+            if (req.orderType == OrderType.AMEND_PRICE_AND_QUANTITY)
+            {
+                order.Price = req.price;
+                order.OrderQty = req.quantity;
+            }
+            else if (req.orderType == OrderType.AMEND_PRICE_ONLY)
+            {
+                order.Price = req.price;
+            }
+            else if (req.orderType == OrderType.AMEND_QUANTITY_ONLY)
+            {
+                order.OrderQty = req.quantity;
+            }
+            else
+            {
+                log.Fatal(string.Format("Invalid order type for amend {0}", req.orderType));
+                throw new ApplicationException("Invalid ordertype for Amend");
+            }
+
+            return order;
+        }
+
         private void OnElapsed(object state)
         {
             log.Info("OMS reconcilation timer elapsed");
@@ -479,5 +442,7 @@ namespace Exchange
                 }
             }
         }
+
+        #endregion
     }
 }

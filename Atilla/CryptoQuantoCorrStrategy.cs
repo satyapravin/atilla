@@ -1,5 +1,4 @@
 ﻿using Exchange;
-using Hedger;
 using Quoter;
 using System.Collections.Concurrent;
 using System;
@@ -11,27 +10,32 @@ using System.Threading.Tasks;
 
 namespace Atilla
 {
-    class CryptoQuantoCorrStrategy
+    public class CryptoQuantoCorrStrategy
     {
+        #region private members
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(CryptoQuantoCorrStrategy));
-        BitmexExchange exchange;
+        IExchange exchange;
         string ethbtcInstr;
         string ethInstr;
         string ethFutureInstr;
         string btcInstr;
         string btcFutureInstr;
         volatile bool stop = false;
-        QuotingService quoter;
+        IQuotingServiceFactory qFactory;
+        IQuotingService quoter;
         HedgingService ethHedger;
         HedgingService btcHedger;
         Thread backGroundThread;
         decimal oldQty = 0;
         Rebalancer rebalancer;
         object positionLocker = new object();
-        ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>> rebalanceTimes = new ConcurrentDictionary<DateTime, Tuple<decimal, decimal, decimal>>();
+        HashSet<DateTime> rebalanceTimes = new HashSet<DateTime>();
+        #endregion
 
-        public CryptoQuantoCorrStrategy(BitmexExchange exch, string ethbtc, string eth, 
-            string ethfut, string btc, string btcfut)
+        #region public interface
+        public CryptoQuantoCorrStrategy(IExchange exch, IQuotingServiceFactory qFactory, 
+                                        string ethbtc, string eth, 
+                                        string ethfut, string btc, string btcfut)
         {
             exchange = exch;
             ethbtcInstr = ethbtc;
@@ -39,62 +43,15 @@ namespace Atilla
             btcInstr = btc;
             ethFutureInstr = ethfut;
             btcFutureInstr = btcfut;
-        }
-
-        private void OnPositionUpdate(PositionUpdate update)
-        {
-            log.Info("OnPositionUpdate");
-
-            lock (positionLocker)
-            {
-                if (update.symbol == ethbtcInstr && oldQty != update.currentQty)
-                {
-                    log.Info("ETHBTC Quantity changed");
-                    var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
-                    var btcP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
-                    
-                    decimal ethQty = 0;
-                    decimal btcQty = 0;
-
-                    Tuple<decimal, decimal, decimal> rebalanceTime = null;
-
-                    if (update.currentQty > 0)
-                    {
-                        ethQty = -Math.Round(update.currentQty / btcP.Item2 / 0.000001m);
-                        btcQty = Math.Round(update.currentQty * ethP.Item1);
-                        rebalanceTimes.Clear();
-                        log.Info("Positive position, rebalancing cleared");
-                    }
-                    else if (update.currentQty < 0)
-                    {
-                        ethQty = -Math.Round(update.currentQty / btcP.Item1 / 0.000001m);
-                        btcQty = Math.Round(update.currentQty * ethP.Item2);
-                        rebalanceTime = new Tuple<decimal, decimal, decimal>(Math.Max(update.currentQty, update.currentQty - oldQty), 
-                                                                             ethQty, btcQty);
-                        log.Info("Negative position, rebalance created");
-                    }
-
-
-                    if (rebalanceTime != null)
-                    {
-                        rebalanceTimes.AddOrUpdate(DateTime.UtcNow.AddHours(1), rebalanceTime, (k, v) => rebalanceTime);
-                        log.Info("Rebalance added");
-                    }
-
-                    oldQty = update.currentQty;
-                    log.Info(string.Format("About to hedge, ETH={0}, BTC={1}", ethQty, btcQty));
-                    ethHedger.Target(ethQty);
-                    btcHedger.Target(btcQty);
-                }
-            }
+            this.qFactory = qFactory;
         }
 
         public void Start()
         {
             log.Info("Strategy started");
-            quoter = new QuotingService(exchange, ethbtcInstr, 5);
-            ethHedger = new HedgingService(exchange, ethInstr, ethFutureInstr);
-            btcHedger = new HedgingService(exchange, btcInstr, btcFutureInstr);
+            quoter = qFactory.CreateService(exchange, ethbtcInstr, 5);
+            ethHedger = new ETHHedgingService(exchange, ethInstr, ethFutureInstr);
+            btcHedger = new BTCHedgingService(exchange, btcInstr, btcFutureInstr);
 
             exchange.PositionSubscribe(ethbtcInstr, OnPositionUpdate);
             exchange.Start();
@@ -112,6 +69,34 @@ namespace Atilla
             rebalancer.Start();
         }
 
+        public void Join()
+        {
+            backGroundThread.Join();
+        }
+
+        public void Stop()
+        {
+            log.Info("Strategy stopping");
+            stop = true;
+            Thread.Sleep(2000);
+            exchange.Stop();
+            log.Info("Strategy stopped");
+        }
+        #endregion
+
+        #region private
+        Tuple<decimal, decimal> ComputeETHBTCBidAsk()
+        {
+            var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
+            var ethFP = exchange.MarketDataSystem.GetBidAsk(ethFutureInstr);
+            var xbtP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
+            var xbtFP = exchange.MarketDataSystem.GetBidAsk(btcFutureInstr);
+            log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethInstr, ethP.Item1, ethP.Item2, btcInstr, xbtP.Item1, xbtP.Item2));
+            log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethFutureInstr, ethFP.Item1, ethFP.Item2, btcFutureInstr, xbtFP.Item1, xbtFP.Item2));
+
+            return Pricer.ComputeETHBTCBidAsk(ethP, ethFP, xbtP, xbtFP);
+        }
+
         private void Run()
         {
             log.Info("Strategy running");
@@ -119,23 +104,8 @@ namespace Atilla
             {
                 try
                 {
-                    decimal baseQuantity = 5;
-                    var ethP = exchange.MarketDataSystem.GetBidAsk(ethInstr);
-                    var ethFP = exchange.MarketDataSystem.GetBidAsk(ethFutureInstr);
-                    var xbtP = exchange.MarketDataSystem.GetBidAsk(btcInstr);
-                    var xbtFP = exchange.MarketDataSystem.GetBidAsk(btcFutureInstr);
-                    log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethInstr, ethP.Item1, ethP.Item2, btcInstr, xbtP.Item1, xbtP.Item2));
-                    log.Info(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ethFutureInstr, ethFP.Item1, ethFP.Item2, btcFutureInstr, xbtFP.Item1, xbtFP.Item2));
-
-                    var ethBid = ethFP.Item1 < ethP.Item1 ? ethFP.Item1 : ethP.Item1;
-                    var ethAsk = ethFP.Item2 > ethP.Item2 ? ethFP.Item2 : ethP.Item2;
-                    var xbtBid = xbtFP.Item1 < xbtP.Item1 ? xbtFP.Item1 : xbtP.Item1;
-                    var xbtAsk = xbtFP.Item2 > xbtP.Item2 ? xbtFP.Item2 : xbtP.Item2;
-
-                    var ethbtcAsk = ethBid / xbtAsk;
-                    var ethbtcBid = ethBid / xbtBid;
-
-                    decimal spread = 0.0016m * 20;
+                    decimal baseQuantity = 10;
+                    var ethBtcBidAsk = ComputeETHBTCBidAsk();
                     var pos = exchange.PositionSystem.GetPosition(ethbtcInstr);
                     decimal posQty = 0;
 
@@ -146,16 +116,15 @@ namespace Atilla
 
                     if (posQty == 0)
                     {
-                        quoter.SetQuote(baseQuantity, baseQuantity, spread, 0, ethbtcBid, ethbtcAsk);
+                        quoter.SetQuote(0, baseQuantity, 0, 0, ethBtcBidAsk.Item1, ethBtcBidAsk.Item2);
                     }
                     else if (posQty > 0)
                     {
-                        quoter.SetQuote(Math.Max(0, baseQuantity - Math.Abs(posQty)), baseQuantity, spread, 0, ethbtcBid, ethbtcAsk);
+                        quoter.SetQuote(0, baseQuantity + posQty, 0, 0, ethBtcBidAsk.Item1, ethBtcBidAsk.Item2);
                     }
                     else
                     {
-                        quoter.SetQuote(baseQuantity, Math.Max(0, baseQuantity - Math.Abs(posQty)), spread, 0, ethbtcBid, ethbtcAsk);
-
+                        quoter.SetQuote(0, Math.Max(0, baseQuantity - Math.Abs(posQty)), 0, 0, ethBtcBidAsk.Item1, ethBtcBidAsk.Item2);
                     }
                 }
                 catch(Exception e)
@@ -168,18 +137,38 @@ namespace Atilla
             }
         }
 
-        public void Join()
-        {
-            backGroundThread.Join();   
-        }
 
-        public void Stop()
+        private void OnPositionUpdate(PositionUpdate update)
         {
-            log.Info("Strategy stopping");
-            stop = true;
-            Thread.Sleep(2000);
-            exchange.Stop();
-            log.Info("Strategy stopped");
+            log.Info("OnPositionUpdate");
+
+            lock (positionLocker)
+            {
+                if (update.symbol == ethbtcInstr && oldQty != update.currentQty)
+                {
+                    log.Info("ETHBTC Quantity changed");
+                    var P = exchange.MarketDataSystem.GetBidAsk(ethbtcInstr);
+                    var notional = 0m;
+                    if (update.currentQty > 0)
+                    {
+                        notional = update.currentQty * P.Item2;
+                        rebalanceTimes.Clear();
+                        log.Info("Positive position, rebalancing cleared");
+                    }
+                    else if (update.currentQty < 0)
+                    {
+                        notional = update.currentQty * P.Item1;
+                        rebalanceTimes.Add(DateTime.UtcNow.AddHours(1));
+                        log.Info("Rebalance added");
+                    }
+
+                    log.Info(string.Format("About to hedge notional", notional));
+                    ethHedger.Target(-notional);
+                    btcHedger.Target(notional);
+                    oldQty = update.currentQty;
+                }
+            }
         }
+        #endregion
     }
 }

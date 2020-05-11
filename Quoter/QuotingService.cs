@@ -9,9 +9,10 @@ using Exchange;
 
 namespace Quoter
 {
-    public class QuotingService
+    class QuotingService : IQuotingService
     {
-        private BitmexExchange exchange;
+        #region private members
+        private IExchange exchange;
         private string symbol;
         private volatile bool stop = false;
         private Thread backGroundThread;
@@ -25,8 +26,10 @@ namespace Quoter
         private decimal decimalRounder = 0;
         private object paramsLock = new object();
         log4net.ILog log = log4net.LogManager.GetLogger(typeof(QuotingService));
+        #endregion
 
-        public QuotingService(BitmexExchange exch, string sym, decimal rounder)
+        #region public interface
+        public QuotingService(IExchange exch, string sym, decimal rounder)
         {
             exchange = exch;
             symbol = sym;
@@ -69,7 +72,9 @@ namespace Quoter
             backGroundThread.Join();
             log.Info("Quoting service stopped");
         }
+        #endregion
 
+        #region private members
         private Exchange.OrderType GetAmendType(OrderDto order, decimal quantity, decimal price)
         {
             if (order.OrdStatus == "Filled" || order.OrdStatus == "Canceled")
@@ -325,5 +330,7 @@ namespace Quoter
                 log.Fatal("Cancel all failed", ex);
             }
         }
+
+#endregion
     }
 }

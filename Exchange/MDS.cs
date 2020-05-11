@@ -9,8 +9,9 @@ using Bitmex.NET.Dtos.Socket;
 
 namespace Exchange
 {
-    public class MDS
+    class MDS : IMDS
     {
+        #region private members
         private class Table
         {
             public decimal[][] bids;
@@ -28,7 +29,9 @@ namespace Exchange
         private ConcurrentDictionary<string, Table> books = new ConcurrentDictionary<string, Table>();
         private ConcurrentDictionary<string, decimal> latests = new ConcurrentDictionary<string, decimal>();
         private log4net.ILog log = log4net.LogManager.GetLogger(typeof(MDS));
+        #endregion
 
+        #region public methods
         public MDS(IBitmexApiSocketService service, HashSet<string> symbols, HashSet<string> indices)
         {
             bitmexService = service;
@@ -99,7 +102,9 @@ namespace Exchange
                 throw new ApplicationException("Index data not found");
             }
         }
+        #endregion
 
+        #region private methods
         private void Post(IEnumerable<InstrumentDto> dtos)
         {
             foreach(var d in dtos)
@@ -133,5 +138,6 @@ namespace Exchange
             Comparer<T> comparer = Comparer<T>.Default;
             Array.Sort<T[]>(data, (x, y) => comparer.Compare(y[col], x[col]));
         }
+        #endregion
     }
 }

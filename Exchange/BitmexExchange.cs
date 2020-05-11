@@ -10,29 +10,33 @@ using log4net;
 
 namespace Exchange
 {
-    public class BitmexExchange
+    class BitmexExchange : IExchange
     {
+        #region private members
         private readonly string bitmexKey;
         private readonly string bitmexSecret;
         private readonly bool isLive;
         private IBitmexAuthorization authorization;
         private IBitmexApiService restService;
         private IBitmexApiSocketService socketService;
-        private OMS orderManagementService;
-        private MDS marketDataService;
-        private FundingFeed fundingService;
-        private PMS positionService;
+        private IOMS orderManagementService;
+        private IMDS marketDataService;
+        private IFundingFeed fundingService;
+        private IPMS positionService;
         private HashSet<string> tradingSymbols;
         private HashSet<string> indices;
         private HashSet<string> fundingInstruments;
         private List<int> fundingHours;
+        private IExchangeFactory factory;
         private Dictionary<string, List<Action<PositionUpdate>>> subscribers = new Dictionary<string, List<Action<PositionUpdate>>>();
         ILog log = LogManager.GetLogger(typeof(BitmexExchange));
+        #endregion
 
+        #region public interface
         public BitmexExchange(string key, string secret, bool isProd,
                       HashSet<string> symbols, HashSet<string> indices,
                       HashSet<string> fundingInstruments,
-                      List<int> fundingHours)
+                      List<int> fundingHours, IExchangeFactory factory)
         {
             bitmexKey = key;
             bitmexSecret = secret;
@@ -41,6 +45,7 @@ namespace Exchange
             this.indices = indices;
             this.fundingInstruments = fundingInstruments;
             this.fundingHours = fundingHours;
+            this.factory = factory;
         }
 
         public void PositionSubscribe(string symbol, Action<PositionUpdate> callback)
@@ -75,10 +80,10 @@ namespace Exchange
                 throw new ApplicationException("Cannot connect bitmex websocket");
             }
 
-            marketDataService = new MDS(socketService, tradingSymbols, indices);
-            fundingService = new FundingFeed(restService, fundingInstruments, fundingHours);
-            orderManagementService = new OMS(socketService, restService);
-            positionService = new PMS(socketService, restService);
+            marketDataService = factory.CreateMarketDataSystem(socketService, tradingSymbols, indices);
+            fundingService = factory.CreateFundingFeed(restService, fundingInstruments, fundingHours);
+            orderManagementService = factory.CreateOrderManagementSystem(socketService, restService);
+            positionService = factory.CreatePositionManagementSystem(socketService, restService);
             
             foreach(var sym in subscribers.Keys)
             {
@@ -93,7 +98,7 @@ namespace Exchange
             log.Info("Exchange started");
         }
 
-        public OMS OrderSystem
+        public IOMS OrderSystem
         {
             get
             {
@@ -101,7 +106,7 @@ namespace Exchange
             }
         }
 
-        public FundingFeed FundingSystem
+        public IFundingFeed FundingSystem
         {
             get
             {
@@ -109,7 +114,7 @@ namespace Exchange
             }
         }
 
-        public MDS MarketDataSystem
+        public IMDS MarketDataSystem
         {
             get
             {
@@ -117,7 +122,7 @@ namespace Exchange
             }
         }
 
-        public PMS PositionSystem
+        public IPMS PositionSystem
         {
             get
             {
@@ -134,5 +139,6 @@ namespace Exchange
             positionService.Stop();
             log.Info("Exchange stopped");
         }
+        #endregion
     }
 }
