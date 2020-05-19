@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using Quoter;
+using System.IO;
+using System.Reflection;
 
 namespace Atilla
 {
@@ -14,7 +16,8 @@ namespace Atilla
 
             try
             {
-                log4net.Config.XmlConfigurator.Configure();
+                var logRepository = log4net.LogManager.GetRepository(Assembly.GetEntryAssembly());
+                log4net.Config.XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
                 var settings = ConfigurationManager.AppSettings;
                 var symbols = new HashSet<string>();
                 var indices = new HashSet<string>();
