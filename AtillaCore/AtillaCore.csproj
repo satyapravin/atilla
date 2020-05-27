@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BitmexRESTApi\BitmexRESTApi.csproj" />
+    <ProjectReference Include="..\ServiceCore\ServiceCore.csproj" />
+    <ProjectReference Include="..\StrategyServices\StrategyCore.csproj" />
+  </ItemGroup>
+
+</Project>
