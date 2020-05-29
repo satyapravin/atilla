@@ -31,7 +31,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ServiceTests", "ServiceTest
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WebSocketTests", "WebSocketTests\WebSocketTests.csproj", "{66F0306A-9349-45CC-88C9-55B5367336D6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AtillaTests", "AtillaTests\AtillaTests.csproj", "{56883AE7-734D-4B01-8CA9-F4DB52B11456}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AtillaTests", "AtillaTests\AtillaTests.csproj", "{56883AE7-734D-4B01-8CA9-F4DB52B11456}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AtillaConsole", "AtillaConsole\AtillaConsole.csproj", "{5A470617-ADB6-480E-9A5D-879D7BC8C403}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -99,6 +101,10 @@ Global
 		{56883AE7-734D-4B01-8CA9-F4DB52B11456}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{56883AE7-734D-4B01-8CA9-F4DB52B11456}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{56883AE7-734D-4B01-8CA9-F4DB52B11456}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A470617-ADB6-480E-9A5D-879D7BC8C403}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A470617-ADB6-480E-9A5D-879D7BC8C403}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A470617-ADB6-480E-9A5D-879D7BC8C403}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A470617-ADB6-480E-9A5D-879D7BC8C403}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

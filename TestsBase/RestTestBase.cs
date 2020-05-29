@@ -17,13 +17,14 @@ namespace TestsBase
             return handlerMock;
         }
 
-        public static void SetupForResponse(Mock<HttpMessageHandler> handler, HttpResponseMessage msg)
+        public static void SetupForResponse(Mock<HttpMessageHandler> handler, 
+            HttpResponseMessage msg, Action<HttpRequestMessage, CancellationToken> action)
         {
             handler.Protected().Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.IsAny<HttpRequestMessage>(),
                 ItExpr.IsAny<CancellationToken>()
-            ).ReturnsAsync(msg).Verifiable();
+            ).Callback<HttpRequestMessage, CancellationToken>(action).ReturnsAsync(msg).Verifiable();
         }
     }
 }

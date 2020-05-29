@@ -16,7 +16,7 @@ namespace AtillaCore
     {
         private decimal _currentETHBTCQuantity = 0;
         private readonly object _positionLocker = new object();
-        private double _rebalanceInterval = 3600000;
+        private readonly double _rebalanceInterval = 3600000;
         private decimal _ethBtcBaseQuoteQuantity = 0;
         private readonly AtillaConfig _config;
         private readonly IInstrumentService _instrumentService;
@@ -65,7 +65,7 @@ namespace AtillaCore
                 _marketDataService = new MarketDataService(_webSocketService, logFactory);
                 SubscribeToMarketData();
                 _positionService = new PositionService(_webSocketService, _restApiService, logFactory);
-                _positionService.Subscribe(ETHBTCFuture, OnPositionUpdate);
+                _positionService.Subscribe(_instrumentService.Get(ETHBTCFuture).Code, OnPositionUpdate);
                 _orderService = new OrderService(_restApiService, _webSocketService, logFactory);
 
                 _ethHedger = new HedgingService(_instrumentService.Get(ETH).Code,
@@ -217,6 +217,19 @@ namespace AtillaCore
                     {
                         posQty = pos.CurrentQty;
                     }
+                    else
+                    {
+                        try
+                        {
+                            pos = _positionService.QueryPositionFromExchange(_instrumentService.Get(ETHBTCFuture).Code);
+                        }
+                        catch(Exception ex) 
+                        { 
+                            _logger.LogError(ex, "Failed to fetch position"); 
+                        }
+                        
+                        posQty = pos != null ? pos.CurrentQty : 0;
+                    }
 
                     if (posQty == 0)
                     {
@@ -232,7 +245,7 @@ namespace AtillaCore
                     }
                     else
                     {
-                        _ethbtcQuoter.SetQuote(baseQuoteQty, ethBtcBidAsk.Item1, 0.001m,
+                        _ethbtcQuoter.SetQuote(baseQuoteQty + Math.Abs(posQty), ethBtcBidAsk.Item1, 0.001m,
                                                Math.Max(0, baseQuoteQty + posQty), ethBtcBidAsk.Item2, 0,
                                                _instrumentService.Get(ETHBTCFuture).TickSize);
                     }
@@ -308,7 +321,7 @@ namespace AtillaCore
         {
             var btcNotional = AtillaPricer.GetETHNotionalInBTC(ethNotional,
                                            _marketDataService.GetBidAsk(_instrumentService.Get(ETH).Code));
-            var ethTargetPosition = AtillaPricer.GetETHQuantityFromETHNotional(ethNotional);
+            var ethTargetPosition = AtillaPricer.GetETHQuantityFromETHNotional(-ethNotional);
             var btcTargetPosition = AtillaPricer.GetBTCQuantityFromBTCNotional(btcNotional,
                                                          _marketDataService.GetBidAsk(_instrumentService.Get(BTC).Code));
             return new Tuple<decimal, decimal>(ethTargetPosition, btcTargetPosition);

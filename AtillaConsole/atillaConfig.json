@@ -1,0 +1,38 @@
+{
+  "Instruments": {
+    "InstrumentDefs": {
+      "ETH": {
+        "Name": "ETH",
+        "Code": "ETHUSD",
+        "TickSize": 0.05
+      },
+      "BTC": {
+        "Name": "BTC",
+        "Code": "XBTUSD",
+        "TickSize": 0.05
+      },
+      "ETHFuture": {
+        "Name": "ETHFuture",
+        "Code": "ETHUSDM20",
+        "TickSize": 0.05
+      },
+      "BTCFuture": {
+        "Name": "BTCFuture",
+        "Code": "XBTM20",
+        "TickSize": 0.05
+      },
+      "ETHBTCFuture": {
+        "Name": "ETHBTCFuture",
+        "Code": "ETHM20",
+        "TickSize": 0.00001
+      }
+    }
+  },
+  "Bitmex": {
+    "Key": "key",
+    "Secret": "secret",
+    "IsProd": false
+  },
+  "RebalanceInterval": 3600000.0,
+  "ETHBTCQuantity": 10.0
+}

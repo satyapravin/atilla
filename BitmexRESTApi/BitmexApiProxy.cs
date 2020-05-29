@@ -32,9 +32,10 @@ namespace BitmexRESTApi
             _bitmexAuthorization = bitmexAuthorization;
             _expiresTimeProvider = expiresTimeProvider;
             _signatureProvider = signatureProvider;
+            
             if (httpHandler != null)
             {
-                _httpClient = new HttpClient(httpHandler);
+                _httpClient = new HttpClient(httpHandler); // for mock testing
             }
             else
             {

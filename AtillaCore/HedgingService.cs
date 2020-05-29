@@ -3,6 +3,7 @@ using ExchangeCore;
 using Microsoft.Extensions.Logging;
 using ServiceCore;
 using System;
+using System.Reflection.Metadata.Ecma335;
 using System.Timers;
 
 namespace AtillaCore
@@ -19,27 +20,39 @@ namespace AtillaCore
         private bool _basePositionPositive;
         private volatile bool _set = false;
         private object _locker = new object();
+        private decimal _previousPosition = 0;
+        private decimal _previousMarketOrderQuantity = 0;
 
         private static readonly string _className = typeof(HedgingService).Name;
         #endregion
 
         #region public members
-        public static void Hedge(string symbol, string future, IMDS mds, IPMS pms, IOMS oms,
-                                 decimal targetPos, bool basePositive, ILogger logger)
+        public static Tuple<decimal, decimal> Hedge(string symbol, string future, IMDS mds, IPMS pms, IOMS oms,
+                                 decimal targetPos, decimal previousPosition, decimal previousTrade, 
+                                 bool basePositive, ILogger logger)
         {
+            
             var spotPosition = pms.GetPosition(symbol);
             var futurePosition = pms.GetPosition(future);
 
-            if (spotPosition == null)
+            if (spotPosition == null || spotPosition.CurrentQty == 0)
             {
                 logger.LogError(string.Format("Spot position not found, querying exchange for {0}", symbol));
-                spotPosition = pms.QueryPositionFromExchange(symbol);
+                try
+                {
+                    spotPosition = pms.QueryPositionFromExchange(symbol);
+                }
+                catch(Exception exc) { logger.LogError(exc, "Failed to fetch spot position"); }
             }
 
-            if (futurePosition == null)
+            if (futurePosition == null || futurePosition.CurrentQty == 0)
             {
                 logger.LogError(string.Format("Future position not found, querying exchange for {0}", future));
-                futurePosition = pms.QueryPositionFromExchange(future);
+                try
+                {
+                    futurePosition = pms.QueryPositionFromExchange(future);
+                }
+                catch(Exception exc) { logger.LogError(exc, "Failed to fetch future position"); }
             }
 
             var currSpotQty = 0m;
@@ -49,6 +62,12 @@ namespace AtillaCore
 
             if (futurePosition != null)
                 currFutQty = futurePosition.CurrentQty;
+
+            if (currSpotQty + currFutQty == previousPosition && previousTrade != 0)
+            {
+                logger.LogCritical("Position not updated. Previous position {p} equal new {n}", previousPosition, currSpotQty + currFutQty);
+                return new Tuple<decimal, decimal>(currSpotQty + currFutQty, 0);
+            }
 
             if (targetPos == 0)
             {
@@ -66,7 +85,7 @@ namespace AtillaCore
                     NewMarketOrder(future, -currFutQty, oms);
                 }
 
-                return;
+                return new Tuple<decimal, decimal>(currFutQty + currSpotQty, -currSpotQty - currFutQty);
             }
 
             logger.LogInformation(string.Format("Current quantity {0}={1}, {2}={3}", symbol, currSpotQty, future, currFutQty));
@@ -81,8 +100,6 @@ namespace AtillaCore
             {
                 string tradeSymbol;
 
-                Tuple<decimal, decimal> refPrice = null;
-
                 if (spotP.Item1 < futP.Item1)
                 {
                     if (targetPos > 0)
@@ -90,17 +107,14 @@ namespace AtillaCore
                         if (basePositive)
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
                         else if (Math.Abs(currSpotQty) < Math.Abs(currFutQty))
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
                         else
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                     }
                     else
@@ -108,17 +122,14 @@ namespace AtillaCore
                         if (!basePositive)
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                         else if (Math.Abs(currFutQty) < Math.Abs(currSpotQty))
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                         else
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
                     }
                 }
@@ -129,17 +140,14 @@ namespace AtillaCore
                         if (basePositive)
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                         else if (Math.Abs(currFutQty) < Math.Abs(currSpotQty))
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                         else
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
                     }
                     else
@@ -147,24 +155,25 @@ namespace AtillaCore
                         if (!basePositive)
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
-                        if (Math.Abs(currSpotQty) < Math.Abs(currFutQty))
+                        else if (Math.Abs(currSpotQty) < Math.Abs(currFutQty))
                         {
                             tradeSymbol = symbol;
-                            refPrice = spotP;
                         }
                         else
                         {
                             tradeSymbol = future;
-                            refPrice = futP;
                         }
                     }
                 }
 
                 logger.LogInformation(string.Format("Selected {0} for quantities {1}/{2} and prices {3}/{4}",
                     tradeSymbol, currSpotQty, currFutQty, spotP.Item1, futP.Item1));
+                NewMarketOrder(tradeSymbol, targetPos, oms);
+                return new Tuple<decimal, decimal>(currSpotQty + currFutQty, targetPos);
             }
+
+            return new Tuple<decimal, decimal>(currFutQty + currSpotQty, 0);
         }
 
         public HedgingService(string sym, 
@@ -194,8 +203,24 @@ namespace AtillaCore
                 if (!_set) return;
                 decimal targetPos = 0;
                 bool basePositive = false;
-                lock (_locker) { targetPos = _targetPosition; basePositive = _basePositionPositive; }
-                Hedge(_symbol, _future, _marketDataService, _positionService, _orderService, targetPos, basePositive, _logger);                    
+                decimal prevPos = 0;
+                decimal prevTrade = 0;
+
+                lock (_locker) 
+                { 
+                    targetPos = _targetPosition; basePositive = _basePositionPositive;
+                    prevPos = _previousPosition;
+                    prevTrade = _previousMarketOrderQuantity;
+                }
+                
+                var tuple = Hedge(_symbol, _future, _marketDataService, _positionService, _orderService, 
+                                   targetPos, prevPos, prevTrade, basePositive, _logger);                    
+
+                lock(_locker)
+                {
+                    _previousPosition = tuple.Item1;
+                    _previousMarketOrderQuantity = tuple.Item2;
+                }
             }
             catch (Exception ex)
             {

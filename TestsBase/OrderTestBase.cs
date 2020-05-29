@@ -4,6 +4,14 @@ using NUnit.Framework;
 
 namespace TestsBase
 {
+    public class DummyTest
+    {
+        [Test]
+        public void Dummy()
+        {
+            Assert.Pass();
+        }
+    }
     public class OrderTestBase
     {
         public static OrderDto GetDummyOrder()

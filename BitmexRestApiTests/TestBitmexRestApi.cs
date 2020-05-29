@@ -1,8 +1,5 @@
 using NUnit.Framework;
 using System.Net.Http;
-using Moq;
-using System.Threading.Tasks;
-using Moq.Protected;
 using System.Threading;
 using System.Net;
 using BitmexRESTApi;
@@ -26,12 +23,7 @@ namespace BitmexRestApiTests
             string orderText = JsonConvert.SerializeObject(new List<OrderDto> { testOrderDtoOne });
 
             var msgHandler = RestTestBase.GetMockHttpHandler();
-            RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
-            {
-                StatusCode = HttpStatusCode.OK,
-                Content = new StringContent(orderText)
-            }); 
-
+            
             var auth = new BitmexAuthorization()
             {
                 Key = "testKey", Secret = "testSecret", BitmexEnvironment = BitmexCore.Models.BitmexEnvironment.Test
@@ -40,12 +32,27 @@ namespace BitmexRestApiTests
             var param = new OrderGETRequestParams
             {
                 Filter = new Dictionary<string, string>
-            {
-                { "open", "true" }
-            }
+                {
+                    { "open", "true" }
+                }
             };
+
+            string actual = string.Empty;
+
+            RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
+                                  {
+                                      StatusCode = HttpStatusCode.OK,
+                                      Content = new StringContent(orderText)
+                                  }, 
+                                  (HttpRequestMessage msg, CancellationToken token) =>
+                                  {
+                                      actual = msg.RequestUri.Query;
+                                  }
+                                  
+           );
+
             var task = bitmexApiSvc.Execute(BitmexApiUrls.Order.GetOrder, param);
-            
+            Assert.IsTrue(actual.Contains("open") && actual.Contains("true"));
             Assert.AreEqual(task.Result.Result.Count, 1);
             OrderTestBase.Compare(testOrderDtoOne, task.Result.Result[0]);
         }
@@ -62,15 +69,21 @@ namespace BitmexRestApiTests
                 Side = "Buy",
                 Symbol = "ETH"
             };
+            var expected = JsonConvert.SerializeObject(param);
 
             var testOrderDtoOne = OrderTestBase.GetDummyOrder();
             string orderText = JsonConvert.SerializeObject(testOrderDtoOne);
+
+            string reqTxt = string.Empty;
 
             var msgHandler = RestTestBase.GetMockHttpHandler();
             RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(orderText)
+            },(HttpRequestMessage msg, CancellationToken token) =>
+                                  {
+                reqTxt = msg.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             });
 
             var auth = new BitmexAuthorization()
@@ -80,8 +93,9 @@ namespace BitmexRestApiTests
                 BitmexEnvironment = BitmexCore.Models.BitmexEnvironment.Test
             };
             var bitmexApiSvc = BitmexApiService.CreateDefaultApi(auth, msgHandler.Object, new NullLoggerFactory());
-
             var task = bitmexApiSvc.Execute(BitmexApiUrls.Order.PostOrder, param);
+            Thread.Sleep(3000);
+            Assert.AreEqual(expected, reqTxt);
             OrderTestBase.Compare(testOrderDtoOne, task.Result.Result);
         }
 
@@ -90,12 +104,16 @@ namespace BitmexRestApiTests
         {
             var testOrderDtoOne = OrderTestBase.GetDummyOrder();
             string orderText = JsonConvert.SerializeObject( testOrderDtoOne );
+            string reqTxt = string.Empty;
 
             var msgHandler = RestTestBase.GetMockHttpHandler();
             RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(orderText)
+            }, (HttpRequestMessage msg, CancellationToken token) =>
+            {
+                reqTxt = msg.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             });
 
             var auth = new BitmexAuthorization()
@@ -113,7 +131,9 @@ namespace BitmexRestApiTests
                 Price = 201.1m,
             };
 
+            var expected = JsonConvert.SerializeObject(param);
             var task = bitmexApiSvc.Execute(BitmexApiUrls.Order.PutOrder, param);
+            Assert.AreEqual(expected, reqTxt);
             OrderTestBase.Compare(testOrderDtoOne, task.Result.Result);
         }
 
@@ -134,12 +154,16 @@ namespace BitmexRestApiTests
             msg.error = new Error();
 
             string errorText = JsonConvert.SerializeObject(msg);
+            string reqTxt = string.Empty;
 
             var msgHandler = RestTestBase.GetMockHttpHandler();
             RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
             {
                 StatusCode = HttpStatusCode.NotFound,
                 Content = new StringContent(errorText)
+            }, (HttpRequestMessage msg, CancellationToken token) =>
+            {
+                reqTxt = msg.RequestUri.Query;
             });
 
             var auth = new BitmexAuthorization()
@@ -154,8 +178,9 @@ namespace BitmexRestApiTests
             {
                 OrderID = "order1"
             };
-
             var task = bitmexApiSvc.Execute(BitmexApiUrls.Order.DeleteOrder, param);
+            Thread.Sleep(2000);
+            Assert.IsTrue(reqTxt.Contains("order1"));
             Assert.That( () => task.Result, Throws.TypeOf<AggregateException>());
         }
 
@@ -176,11 +201,14 @@ namespace BitmexRestApiTests
             var testPositionDtoOne = PositionTestBase.GetDummyPosition();
             string posText = JsonConvert.SerializeObject(new List<PositionDto> { testPositionDtoOne });
 
-
+            string reqTxt = string.Empty;
             RestTestBase.SetupForResponse(msgHandler, new HttpResponseMessage()
             {
                 StatusCode = HttpStatusCode.OK,
                 Content = new StringContent(posText)
+            }, (HttpRequestMessage msg, CancellationToken token) =>
+            {
+                reqTxt = msg.RequestUri.Query;
             });
 
             var param = new PositionGETRequestParams
@@ -192,7 +220,7 @@ namespace BitmexRestApiTests
             };
 
             var task = bitmexApiSvc.Execute(BitmexApiUrls.Position.GetPosition, param);
-
+            Assert.IsTrue(reqTxt.Contains("ETHUSD"));
             Assert.AreEqual(task.Result.Result.Count, 1);
             PositionTestBase.Compare(testPositionDtoOne, task.Result.Result[0]);
         }

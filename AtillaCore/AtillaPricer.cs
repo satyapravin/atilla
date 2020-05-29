@@ -30,11 +30,11 @@ namespace AtillaCore
         {
             if (ethQuantity > 0)
             {
-                return ETHMULTIPLIER * ethQuantity * ethBidAsk.Item2;
+                return ethQuantity * ethBidAsk.Item2;
             }
             else
             {
-                return ETHMULTIPLIER * ethQuantity * ethBidAsk.Item1;
+                return ethQuantity * ethBidAsk.Item1;
             }
         }
 
