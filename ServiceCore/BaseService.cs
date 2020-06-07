@@ -13,11 +13,11 @@ namespace ServiceCore
         protected string _name;
         protected volatile bool _status;
         protected bool _disposed = false;
-        protected ILogger<BaseService> _logger;
+        protected ILogger _logger;
         public BaseService(string name, ILoggerFactory factory)
         {
             _name = name;
-            _logger = factory.CreateLogger<BaseService>();
+            _logger = factory.CreateLogger(this.GetType());
         }
 
         public string Name { get => _name; }
