@@ -82,7 +82,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogCritical(string.Format("Query for {0} position excepted", symbol), e);
+                _logger.LogCritical(e, string.Format("Query for {0} position excepted", symbol));
             }
 
             return null;
@@ -166,7 +166,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogCritical("position fetch error", e);
+                _logger.LogCritical(e, "position fetch error");
             }
 
             return new List<PositionDto>();

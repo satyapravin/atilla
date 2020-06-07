@@ -161,7 +161,7 @@ namespace BitmexWebSocket
 
         protected virtual void OnErrorReceived(ErrorEventArgs args)
         {
-            _logger.LogError("Socket exception", args.Exception);
+            _logger.LogError(args.Exception, "Socket exception");
             ErrorReceived?.Invoke(new BitmextErrorEventArgs(args.Exception));
         }
 

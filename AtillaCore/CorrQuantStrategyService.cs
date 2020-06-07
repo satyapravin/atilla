@@ -103,7 +103,7 @@ namespace AtillaCore
 
         private void OnWebSocketErrorReceived(object sender, BitmextErrorEventArgs e)
         {
-            _logger.LogError("OnWebSocketError", e.Exception);
+            _logger.LogError(e.Exception, "OnWebSocketError");
         }
 
         private void OnWebSocketClosed(object sender, BitmexCloseEventArgs e)
@@ -245,7 +245,7 @@ namespace AtillaCore
                     }
                     else
                     {
-                        _ethbtcQuoter.SetQuote(baseQuoteQty + Math.Abs(posQty), ethBtcBidAsk.Item1, 0.001m,
+                        _ethbtcQuoter.SetQuote(baseQuoteQty + Math.Abs(posQty), ethBtcBidAsk.Item1, 0.002m,
                                                Math.Max(0, baseQuoteQty + posQty), ethBtcBidAsk.Item2, 0,
                                                _instrumentService.Get(ETHBTCFuture).TickSize);
                     }
@@ -319,11 +319,10 @@ namespace AtillaCore
 
         public Tuple<decimal, decimal> GetEquilibriumQuantities(decimal ethNotional)
         {
-            var btcNotional = AtillaPricer.GetETHNotionalInBTC(ethNotional,
+            var btcTargetPosition = AtillaPricer.GetBTCQuantityFromETHBTCQuantity(ethNotional,
                                            _marketDataService.GetBidAsk(_instrumentService.Get(ETH).Code));
-            var ethTargetPosition = AtillaPricer.GetETHQuantityFromETHNotional(-ethNotional);
-            var btcTargetPosition = AtillaPricer.GetBTCQuantityFromBTCNotional(btcNotional,
-                                                         _marketDataService.GetBidAsk(_instrumentService.Get(BTC).Code));
+            var ethTargetPosition = AtillaPricer.GetETHQuantityFromETHBTCQuantity(-ethNotional,
+                                           _marketDataService.GetBidAsk(_instrumentService.Get(BTC).Code));
             return new Tuple<decimal, decimal>(ethTargetPosition, btcTargetPosition);
         }
 

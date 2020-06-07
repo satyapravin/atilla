@@ -29,10 +29,10 @@
     }
   },
   "Bitmex": {
-    "Key": "key",
-    "Secret": "secret",
+    "Key": "1vHfEFnaODWvZGZlbRcClbUK",
+    "Secret": "DZAgvMfTZN7REFcoQb16u-Zl6YraWfDUNwUZeQoatdnuHkVg",
     "IsProd": false
   },
   "RebalanceInterval": 3600000.0,
-  "ETHBTCQuantity": 10.0
+  "ETHBTCQuantity": 1.0
 }

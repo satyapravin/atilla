@@ -190,7 +190,7 @@ namespace BitmexWebSocket
                 {
                     args = dataItems.Take();
                 }
-                catch (InvalidOperationException e) { _logger.LogCritical("Deque failed", e); }
+                catch (InvalidOperationException e) { _logger.LogCritical(e, "Deque failed"); }
 
                 if (args != null)
                 {
@@ -198,7 +198,7 @@ namespace BitmexWebSocket
                     {
                         subscription.Execute(args.Data, args.Action);
                     }
-                    catch(Exception e) { _logger.LogCritical("Consumer failed", e); }
+                    catch(Exception e) { _logger.LogCritical(e, "Consumer failed"); }
                 }
             }
         }

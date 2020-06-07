@@ -33,6 +33,11 @@ namespace AtillaConsole
                 var strategy = new AtillaCore.CorrQuantStrategyService(config, 
                     new CustomWebSocketFactory(), null, loggerFactory);
                 strategy.Start();
+
+                string str = string.Empty;
+
+                while(!str.Equals("quit"))
+                    str = Console.ReadLine();
             }
             catch(Exception e)
             {

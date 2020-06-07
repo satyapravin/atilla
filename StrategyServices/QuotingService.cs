@@ -193,7 +193,7 @@ namespace ExchangeCore
 
                 catch (Exception ex)
                 {
-                    _logger.LogCritical("Quote failed", ex);
+                    _logger.LogCritical(ex, "Quote failed");
                     CancelAllOrders();
                 }
             }            
@@ -337,7 +337,7 @@ namespace ExchangeCore
             }
             catch (Exception ex)
             {
-                _logger.LogCritical("Cancel all failed", ex);
+                _logger.LogCritical(ex, "Cancel all failed");
             }
         }        
         #endregion

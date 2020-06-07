@@ -67,11 +67,11 @@ namespace ExchangeCore
             }
             catch (TimeoutException e)
             {
-                _logger.LogError("new order request timed out in 5 seconds", e);
+                _logger.LogError(e, "new order request timed out in 5 seconds");
             }
             catch (BitmexApiException e)
             {
-                _logger.LogError("New order failed", e);
+                _logger.LogError(e, "new order failed");
                 if (e.StatusCode != 503)
                 {
                     throw;
@@ -79,7 +79,7 @@ namespace ExchangeCore
             }
             catch (AggregateException e)
             {
-                _logger.LogError("new order failed", e);
+                _logger.LogError(e, "new order failed");
                 e.Handle(inner =>
                 {
                     if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -90,7 +90,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("new order request failed", e);
+                _logger.LogError(e, "new order request failed");
             }
         }
 
@@ -108,11 +108,11 @@ namespace ExchangeCore
             }
             catch (TimeoutException e)
             {
-                _logger.LogError("Cancel timeout", e);
+                _logger.LogError(e, "Cancel timeout");
             }
             catch (BitmexApiException e)
             {
-                _logger.LogError("Cancel order failed with bitmexException", e);
+                _logger.LogError(e, "Cancel order failed with bitmexException");
 
                 if (e.StatusCode != 503)
                 {
@@ -121,7 +121,7 @@ namespace ExchangeCore
             }
             catch (AggregateException e)
             {
-                _logger.LogError("cancel order failed", e);
+                _logger.LogError(e, "cancel order failed");
                 e.Handle(inner =>
                 {
                     if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -132,7 +132,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Cancel order failed with general exception", e);
+                _logger.LogError(e, "Cancel order failed with general exception");
                 throw;
             }
         }
@@ -150,12 +150,12 @@ namespace ExchangeCore
                 }
                 catch (TimeoutException e)
                 {
-                    _logger.LogError("CancelAll timed out", e);
+                    _logger.LogError(e, "CancelAll timed out");
                     return;
                 }
                 catch (BitmexApiException e)
                 {
-                    _logger.LogError("CancelAll failed with bitmexException", e);
+                    _logger.LogError(e, "CancelAll failed with bitmexException");
                     if (e.StatusCode != 503)
                     {
                         throw;
@@ -163,7 +163,7 @@ namespace ExchangeCore
                 }
                 catch (AggregateException e)
                 {
-                    _logger.LogError("Cancel all failed", e);
+                    _logger.LogError(e, "Cancel all failed");
                     e.Handle(inner =>
                     {
                         if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -174,7 +174,7 @@ namespace ExchangeCore
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError("Cancel all failed", e);
+                    _logger.LogError(e, "Cancel all failed");
                     throw;
                 }
             }
@@ -193,11 +193,11 @@ namespace ExchangeCore
             }
             catch (TimeoutException e)
             {
-                _logger.LogError("Amend timed out", e);
+                _logger.LogError(e, "Amend timed out");
             }
             catch (BitmexApiException e)
             {
-                _logger.LogError("Amend order failed with bitmexException", e);
+                _logger.LogError(e, "Amend order failed with bitmexException");
                 if (e.StatusCode != 503)
                 {
                     throw;
@@ -205,7 +205,7 @@ namespace ExchangeCore
             }
             catch (AggregateException e)
             {
-                _logger.LogError("Amend order failed", e);
+                _logger.LogError(e, "Amend order failed");
                 e.Handle(inner =>
                 {
                     if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -216,7 +216,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Amend order failed with general exception", e);
+                _logger.LogError(e, "Amend order failed with general exception");
                 throw e;
             }
         }
@@ -249,11 +249,11 @@ namespace ExchangeCore
             }
             catch (TimeoutException e)
             {
-                _logger.LogError("NewOrder bulk timed out", e);
+                _logger.LogError(e, "NewOrder bulk timed out");
             }
             catch (BitmexApiException e)
             {
-                _logger.LogError("New order failed with bitmexException", e);
+                _logger.LogError(e, "New order failed with bitmexException");
                 if (e.StatusCode != 503)
                 {
                     throw;
@@ -261,7 +261,7 @@ namespace ExchangeCore
             }
             catch (AggregateException e)
             {
-                _logger.LogError("new bulk order failed", e);
+                _logger.LogError(e, "new bulk order failed");
                 e.Handle(inner =>
                 {
                     if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -272,7 +272,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("New bulk order failed with general exception", e);
+                _logger.LogError(e, "New bulk order failed with general exception");
             }
         }
 
@@ -303,11 +303,11 @@ namespace ExchangeCore
             }
             catch (TimeoutException e)
             {
-                _logger.LogError("Amend bulk order timedout", e);
+                _logger.LogError(e, "Amend bulk order timedout");
             }
             catch (BitmexApiException e)
             {
-                _logger.LogError("Amend bulk order failed with bitmexException", e);
+                _logger.LogError(e, "Amend bulk order failed with bitmexException");
                 if (e.StatusCode != 503)
                 {
                     throw;
@@ -315,7 +315,7 @@ namespace ExchangeCore
             }
             catch (AggregateException e)
             {
-                _logger.LogError("Amend bulk order failed", e);
+                _logger.LogError(e, "Amend bulk order failed");
                 e.Handle(inner =>
                 {
                     if (inner is BitmexApiException exception && exception.StatusCode == 503)
@@ -326,7 +326,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("Amend bulk order failed with general exception", e);
+                _logger.LogError(e, "Amend bulk order failed with general exception");
                 throw e;
             }
         }
@@ -399,7 +399,7 @@ namespace ExchangeCore
             }
             catch (Exception e)
             {
-                _logger.LogError("GetOpenOrders failed", e);
+                _logger.LogError(e, "GetOpenOrders failed");
             }
 
             return new List<OrderDto>();
