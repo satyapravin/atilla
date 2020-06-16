@@ -331,6 +331,45 @@ namespace ExchangeCore
             }
         }
 
+        public void ClosePosition(string symbol)
+        {
+            var order = new OrderPOSTRequestParams() { Symbol = symbol, ExecInst = "Close" };
+            try
+            {
+                var response = _restService.Execute(BitmexApiUrls.Order.PostOrder, order);
+                response = TaskExtensions.TimeoutAfter(response, new TimeSpan(0, 0, 5));
+                var dto = response.Result.Result;
+                var cache = _ordersBySymbol.GetOrAdd(dto.Symbol, new OrderCache());
+                cache.Reconcile(dto);
+            }
+            catch (TimeoutException e)
+            {
+                _logger.LogError(e, "close position timed out in 5 seconds");
+            }
+            catch (BitmexApiException e)
+            {
+                _logger.LogError(e, "close position order failed");
+                if (e.StatusCode != 503)
+                {
+                    throw;
+                }
+            }
+            catch (AggregateException e)
+            {
+                _logger.LogError(e, "close position order failed");
+                e.Handle(inner =>
+                {
+                    if (inner is BitmexApiException exception && exception.StatusCode == 503)
+                        return true;
+                    else
+                        return false;
+                });
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "new close position request failed");
+            }
+        }
         #endregion
 
         #region protected members

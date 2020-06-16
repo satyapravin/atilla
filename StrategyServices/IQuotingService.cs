@@ -8,7 +8,7 @@ namespace ExchangeCore
 {
     public interface IQuotingService : IBaseService
     {
-        void SetQuote(decimal bidQty, decimal bidPrice, decimal bidSpread,
-                      decimal askQty, decimal askPrice, decimal askSpread, decimal tickSize);
+        void SetAskQuote(decimal askQty, decimal askPrice, decimal askSpread, decimal tickSize);
+        void Close();
     }
 }

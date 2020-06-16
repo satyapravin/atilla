@@ -20,6 +20,7 @@ namespace ExchangeCore
         private readonly IBitmexApiService _restService;
         private ConcurrentDictionary<string, PositionDto> _positionsBySymbol = new ConcurrentDictionary<string, PositionDto>();
         private Dictionary<string, List<Action<PositionUpdate>>> _subscribers = new Dictionary<string, List<Action<PositionUpdate>>>();
+        private HashSet<Action<Liquidation>> _liquidationSubscribers = new HashSet<Action<Liquidation>>();
         private static readonly string _classname = typeof(PositionService).Name;
         #endregion
 
@@ -104,6 +105,14 @@ namespace ExchangeCore
 
             _subscribers[symbol].Add(callback);
         }
+
+
+        public void SubscribeForLiquidationEvents(Action<Liquidation> callback)
+        {
+            _logger.LogInformation("Liquidation subscription received");
+            _liquidationSubscribers.Add(callback);
+        }
+
         #endregion
 
         #region protected members
@@ -209,6 +218,13 @@ namespace ExchangeCore
 
                     _subscribers[dto.Symbol].ForEach(action => action(update));
                 }
+
+                if (!string.IsNullOrEmpty(dto.PosState) 
+                && dto.PosState.Equals("Liquidation", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    var liquidation = new Liquidation() { symbol = dto.Symbol };
+                    _liquidationSubscribers.ToList().ForEach(Action => Action(liquidation));
+                }
             }
         }
 
@@ -232,6 +248,7 @@ namespace ExchangeCore
         {
             Stop();
         }
+
         #endregion
     }
 }
