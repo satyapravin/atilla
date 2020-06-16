@@ -294,6 +294,7 @@ namespace AtillaCore
                 decimal ethTargetPosition = 0;
                 decimal btcTargetPosition = 0;
                 bool ethbtcPositivePosition = false;
+                bool posSet = false;
 
                 lock (_positionLocker)
                 {
@@ -305,10 +306,14 @@ namespace AtillaCore
                         btcTargetPosition = eqQty.Item2;
                         _currentETHBTCQuantity = update.currentQty;
                         ethbtcPositivePosition = _currentETHBTCQuantity > 0;
+                        posSet = true;
                     }
                 }
 
-                Hedge(ethTargetPosition, btcTargetPosition, ethbtcPositivePosition);
+                if (posSet)
+                {
+                    Hedge(ethTargetPosition, btcTargetPosition, ethbtcPositivePosition);
+                }
             }
             catch(Exception e)
             {

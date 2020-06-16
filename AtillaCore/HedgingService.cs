@@ -181,7 +181,7 @@ namespace AtillaCore
                               IOMS ordSvc, 
                               IPMS posSvc, 
                               IMDS mdsSvc,
-                              ILoggerFactory factory):base(_className, 2000, factory)
+                              ILoggerFactory factory):base(_className, 5000, factory)
         {
             _symbol = sym;
             _future = fut;

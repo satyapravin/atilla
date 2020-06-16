@@ -13,11 +13,11 @@ namespace AtillaCore
         {
             if (ethBtcQty > 0)
             {
-                return ethBtcQty * ethBidAsk.Item2;
+                return Math.Round(ethBtcQty * ethBidAsk.Item2);
             }
             else
             {
-                return ethBtcQty * ethBidAsk.Item1;
+                return Math.Round(ethBtcQty * ethBidAsk.Item1);
             }
         }
 

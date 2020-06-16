@@ -73,7 +73,10 @@ namespace ExchangeCore
 
                 if (task.IsCompleted)
                 {
-                    return task.Result.Result.First();
+                    if (task.Result.Result.Count > 0)
+                        return task.Result.Result.First();
+                    else
+                        return null;
                 }
                 else
                 {
