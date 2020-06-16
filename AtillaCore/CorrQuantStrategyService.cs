@@ -66,6 +66,7 @@ namespace AtillaCore
                 SubscribeToMarketData();
                 _positionService = new PositionService(_webSocketService, _restApiService, logFactory);
                 _positionService.Subscribe(_instrumentService.Get(ETHBTCFuture).Code, OnPositionUpdate);
+                _positionService.SubscribeForLiquidationEvents(OnLiquidation);
                 _orderService = new OrderService(_restApiService, _webSocketService, logFactory);
 
                 _ethHedger = new HedgingService(_instrumentService.Get(ETH).Code,
@@ -233,20 +234,11 @@ namespace AtillaCore
 
                     if (posQty == 0)
                     {
-                        _ethbtcQuoter.SetQuote(baseQuoteQty, ethBtcBidAsk.Item1, 0.0015m,
-                                               baseQuoteQty, ethBtcBidAsk.Item2, 0, _instrumentService.Get(ETHBTCFuture).TickSize);
-                    }
-                    else if (posQty > 0)
-                    {
-                        _ethbtcQuoter.SetQuote(Math.Max(0, baseQuoteQty - posQty), 
-                                               ethBtcBidAsk.Item1, 0.001m, 
-                                               baseQuoteQty + posQty, ethBtcBidAsk.Item2, 0,
-                                               _instrumentService.Get(ETHBTCFuture).TickSize);
+                        _ethbtcQuoter.SetAskQuote(baseQuoteQty, ethBtcBidAsk.Item2, 0, _instrumentService.Get(ETHBTCFuture).TickSize);
                     }
                     else
                     {
-                        _ethbtcQuoter.SetQuote(baseQuoteQty + Math.Abs(posQty), ethBtcBidAsk.Item1, 0.002m,
-                                               Math.Max(0, baseQuoteQty + posQty), ethBtcBidAsk.Item2, 0,
+                        _ethbtcQuoter.SetAskQuote(Math.Max(0, baseQuoteQty + posQty), ethBtcBidAsk.Item2, 0,
                                                _instrumentService.Get(ETHBTCFuture).TickSize);
                     }
                 }
@@ -285,8 +277,26 @@ namespace AtillaCore
         {
             _ethHedger.AcquirePosition(ethQty, !basePositive);
             _btcHedger.AcquirePosition(btcQty, basePositive);
+            _ethbtcQuoter.Close();
         }
 
+        private void CloseAllPositions()
+        {
+            _ethHedger.AcquirePosition(0, false);
+            _btcHedger.AcquirePosition(0, false);
+        }
+
+        private void OnLiquidation(Liquidation liquidation)
+        {
+            try
+            {
+                CloseAllPositions();
+            }
+            catch(Exception e)
+            {
+                _logger.LogError(e, "Close all positions excepted");
+            }
+        }
         private void OnPositionUpdate(PositionUpdate update)
         {
             try

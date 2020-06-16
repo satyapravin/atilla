@@ -16,5 +16,6 @@ namespace ExchangeCore
         public void Amend(OrderRequest req);
         public void NewOrder(List<OrderRequest> reqs);
         public void Amend(List<OrderRequest> reqs);
+        public void ClosePosition(string symbol);
     }
 }
