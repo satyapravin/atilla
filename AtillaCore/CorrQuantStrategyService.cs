@@ -277,13 +277,13 @@ namespace AtillaCore
         {
             _ethHedger.AcquirePosition(ethQty, !basePositive);
             _btcHedger.AcquirePosition(btcQty, basePositive);
-            _ethbtcQuoter.Close();
         }
 
         private void CloseAllPositions()
         {
             _ethHedger.AcquirePosition(0, false);
             _btcHedger.AcquirePosition(0, false);
+            _ethbtcQuoter.Close();
         }
 
         private void OnLiquidation(Liquidation liquidation)
