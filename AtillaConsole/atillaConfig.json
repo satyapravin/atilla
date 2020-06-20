@@ -29,8 +29,8 @@
     }
   },
   "Bitmex": {
-    "Key": "1vHfEFnaODWvZGZlbRcClbUK",
-    "Secret": "DZAgvMfTZN7REFcoQb16u-Zl6YraWfDUNwUZeQoatdnuHkVg",
+    "Key": "037_T7Cgv5BTPho0dwbysIcs",
+    "Secret": "uSz4rld-NHD5eGDLGmK-NOEE2JIYEgtG94TCgdiftQjDb8zv",
     "IsProd": false
   },
   "RebalanceInterval": 3600000.0,
