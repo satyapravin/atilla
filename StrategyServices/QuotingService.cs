@@ -145,7 +145,6 @@ namespace ExchangeCore
                 catch (Exception ex)
                 {
                     _logger.LogCritical(ex, "Quote failed");
-                    CancelAllOrders();
                 }
             }            
         }
