@@ -16,6 +16,10 @@ namespace ExchangeCore
         private decimal _askPriceRef = 0;
         private decimal _tickSize = 0;
 
+        private decimal _bidQuantity = 0;
+        private decimal _bidSpreadFromMid = 0;
+        private decimal _bidPriceRef = 0;
+
         private readonly object _lock = new object();
         private readonly string _symbol;
         private readonly IMDS _mdsService;
@@ -66,6 +70,18 @@ namespace ExchangeCore
 
             _set = true;
         }
+
+        public void SetBidQuote(decimal bidQty, decimal bidPrice, decimal bidSpread, decimal tickSize)
+        {
+            _set = false;
+            lock(_lock)
+            {
+                _bidQuantity = bidQty;
+                _bidPriceRef = bidPrice;
+                _bidSpreadFromMid = bidSpread;
+                _tickSize = tickSize;
+            }
+        }
         #endregion
 
         #region protected members
@@ -88,18 +104,27 @@ namespace ExchangeCore
                     decimal askSize;
                     decimal askSpread;
                     decimal askRef;
+                    decimal bidSize;
+                    decimal bidSpread;
+                    decimal bidRef;
 
                     lock (_lock)
                     {
                         askSize = _askQuantity;
                         askSpread = _askSpreadFromMid;
                         askRef = _askPriceRef;
+                        bidSize = _bidQuantity;
+                        bidSpread = _bidSpreadFromMid;
+                        bidRef = _bidPriceRef;
                     }
 
                     decimal askPrice = askRef + askRef * askSpread;
                     askPrice = askPrice - askPrice % _tickSize + ((askPrice % _tickSize < _tickSize / 2) ? 0.0m : _tickSize);
 
-                    _logger.LogInformation("Computed Ask={price}", Math.Round(askPrice, 6));
+                    decimal bidPrice = bidRef - bidRef * bidSpread;
+                    bidPrice = bidPrice - bidPrice % _tickSize + ((bidPrice % _tickSize < _tickSize / 2) ? 0.0m : _tickSize);
+
+                    _logger.LogInformation("Computed Ask={askPrice}, Bid={bidPrice}", Math.Round(askPrice, 6), Math.Round(bidPrice, 6));
                     var bidAsk = _mdsService.GetBidAsk(_symbol);
 
                     if (bidAsk.Item2 > askPrice)
@@ -107,10 +132,16 @@ namespace ExchangeCore
                         askPrice = bidAsk.Item2;
                     }
 
-                    _logger.LogInformation(string.Format("Quoting Bid/Ask={0}", Math.Round(askPrice, 6)));
+                    if (bidAsk.Item1 < bidPrice)
+                    {
+                        bidPrice = bidAsk.Item1;
+                    }
+
+                    _logger.LogInformation(string.Format("Quoting Bid/Ask={0}/{1}", Math.Round(bidPrice, 6), Math.Round(askPrice, 6)));
                     var orders = _omsService.GetOpenOrders(_symbol);
 
                     OrderDto sellOrder = null;
+                    OrderDto buyOrder = null;
 
                     if (orders.Count > 1)
                     {
@@ -119,9 +150,9 @@ namespace ExchangeCore
                     else if (orders.Count == 1)
                     {
                         if (orders[0].Side == "Buy")
-                            throw new ApplicationException("Quote order is buy!");
-                        
-                        sellOrder = orders[0];
+                            buyOrder = orders[0];
+                        else
+                            sellOrder = orders[0];
                     }
 
                     if (sellOrder != null && askSize == 0)
@@ -129,6 +160,13 @@ namespace ExchangeCore
                         _logger.LogInformation("Ask target is zero");
                         CancelOrder(sellOrder);
                         sellOrder = null;
+                    }
+
+                    if (buyOrder != null && bidSize == 0)
+                    {
+                        _logger.LogInformation("Bid target is zero");
+                        CancelOrder(buyOrder);
+                        buyOrder = null;
                     }
 
                     if (sellOrder != null)
@@ -140,6 +178,17 @@ namespace ExchangeCore
                     {
                         _logger.LogInformation("No orders found, place only ask quote");
                         PlaceSingleQuote(askSize, askPrice, OrderSide.SELL);
+                    }
+
+                    if (buyOrder != null)
+                    {
+                        _logger.LogInformation("Update bid quote");
+                        Amend(buyOrder, bidSize, bidPrice);
+                    }
+                    else if (bidSize > 0)
+                    {
+                        _logger.LogInformation("No orders found, place only bid quote");
+                        PlaceSingleQuote(bidSize, bidPrice, OrderSide.BUY);
                     }
                 }
                 catch (Exception ex)

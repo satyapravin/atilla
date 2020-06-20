@@ -240,6 +240,12 @@ namespace AtillaCore
                     {
                         _ethbtcQuoter.SetAskQuote(Math.Max(0, baseQuoteQty + posQty), ethBtcBidAsk.Item2, 0,
                                                _instrumentService.Get(ETHBTCFuture).TickSize);
+
+                        if ((Math.Abs(posQty) > baseQuoteQty) && posQty < 0)
+                        {
+                            _ethbtcQuoter.SetBidQuote(Math.Abs(posQty) - baseQuoteQty, ethBtcBidAsk.Item1, 0,
+                                                _instrumentService.Get(ETHBTCFuture).TickSize);
+                        }
                     }
                 }
             }
