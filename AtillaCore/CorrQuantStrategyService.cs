@@ -31,10 +31,8 @@ namespace AtillaCore
         private readonly IHedgingService _ethHedger;
         private readonly IHedgingService _btcHedger;
         private static readonly string ETHBTCFuture = "ETHBTCFuture";
-        private static readonly string ETHFuture = "ETHFuture";
         private static readonly string ETH = "ETH";
         private static readonly string BTC = "BTC";
-        private static readonly string BTCFuture = "BTCFuture";
 
         private static readonly string _className = typeof(CorrQuantStrategyService).Name;
 
@@ -70,14 +68,12 @@ namespace AtillaCore
                 _orderService = new OrderService(_restApiService, _webSocketService, logFactory);
 
                 _ethHedger = new HedgingService(_instrumentService.Get(ETH).Code,
-                                                _instrumentService.Get(ETHFuture).Code,
                                                 _orderService,
                                                 _positionService,
                                                 _marketDataService,
                                                 logFactory);
 
                 _btcHedger = new HedgingService(_instrumentService.Get(BTC).Code,
-                                                _instrumentService.Get(BTCFuture).Code,
                                                 _orderService,
                                                 _positionService,
                                                 _marketDataService,
@@ -226,7 +222,8 @@ namespace AtillaCore
                         }
                         catch(Exception ex) 
                         { 
-                            _logger.LogError(ex, "Failed to fetch position"); 
+                            _logger.LogError(ex, "Failed to fetch position");
+                            return;
                         }
                         
                         posQty = pos != null ? pos.CurrentQty : 0;
@@ -235,6 +232,7 @@ namespace AtillaCore
                     if (posQty == 0)
                     {
                         _ethbtcQuoter.SetAskQuote(baseQuoteQty, ethBtcBidAsk.Item2, 0, _instrumentService.Get(ETHBTCFuture).TickSize);
+                        _ethbtcQuoter.SetBidQuote(0, ethBtcBidAsk.Item1, 0, _instrumentService.Get(ETHBTCFuture).TickSize);
                     }
                     else
                     {
@@ -245,6 +243,10 @@ namespace AtillaCore
                         {
                             _ethbtcQuoter.SetBidQuote(Math.Abs(posQty) - baseQuoteQty, ethBtcBidAsk.Item1, 0,
                                                 _instrumentService.Get(ETHBTCFuture).TickSize);
+                        }
+                        else
+                        {
+                            _ethbtcQuoter.SetBidQuote(0, ethBtcBidAsk.Item1, 0, _instrumentService.Get(ETHBTCFuture).TickSize);
                         }
                     }
                 }
@@ -258,13 +260,9 @@ namespace AtillaCore
         public Tuple<decimal, decimal> ComputeETHBTCBidAsk()
         {
             var ethP = _marketDataService.GetBidAsk(_instrumentService.Get(ETH).Code);
-            var ethFP = _marketDataService.GetBidAsk(_instrumentService.Get(ETHFuture).Code);
             var xbtP = _marketDataService.GetBidAsk(_instrumentService.Get(BTC).Code);
-            var xbtFP = _marketDataService.GetBidAsk(_instrumentService.Get(BTCFuture).Code);
             _logger.LogInformation(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ETH, ethP.Item1, ethP.Item2, BTC, xbtP.Item1, xbtP.Item2));
-            _logger.LogInformation(string.Format("{0} bidAsk = {1}/{2}, {3} bidAsk={4}/{5}", ETHFuture, ethFP.Item1, ethFP.Item2, BTCFuture, xbtFP.Item1, xbtFP.Item2));
-
-            return AtillaPricer.ComputeETHBTCBidAsk(ethP, ethFP, xbtP, xbtFP);
+            return AtillaPricer.ComputeETHBTCBidAsk(ethP, xbtP);
         }
 
         private void SubscribeToMarketData()
@@ -273,8 +271,6 @@ namespace AtillaCore
             {
                     _instrumentService.Get(ETH).Code,
                     _instrumentService.Get(BTC).Code,
-                    _instrumentService.Get(ETHFuture).Code,
-                    _instrumentService.Get(BTCFuture).Code,
                     _instrumentService.Get(ETHBTCFuture).Code
             });
         }

@@ -33,16 +33,11 @@ namespace AtillaCore
             }
         }
     
-        public static BidAsk ComputeETHBTCBidAsk(BidAsk eth, BidAsk ethFuture, BidAsk xbt, BidAsk xbtFuture)
+        public static BidAsk ComputeETHBTCBidAsk(BidAsk eth, BidAsk xbt)
         {
             if (!Validate(eth))
             {
                 throw new ArgumentException("Non positive values for bidAsk for ETH");
-            }
-
-            if (!Validate(ethFuture))
-            {
-                throw new ArgumentException("Non positive values for bidAsk for ETHFuture");
             }
 
             if (!Validate(xbt))
@@ -50,16 +45,16 @@ namespace AtillaCore
                 throw new ArgumentException("Non positive values for bidAsk for XBT");
             }
 
-            if (!Validate(xbtFuture))
-            {
-                throw new ArgumentException("Non positive values for bidAsk for XBTFuture");
-            }
+            var ethBid = eth.Item1;
+            var xbtAsk = xbt.Item2;
 
-            var ethBid = ethFuture.Item1 < eth.Item1 ? ethFuture.Item1 : eth.Item1;
-            var xbtAsk = xbtFuture.Item2 > xbt.Item2 ? xbtFuture.Item2 : xbt.Item2;
+            var ethbtcAsk = ethBid / xbtAsk;
 
-            var ethbtc = ethBid / xbtAsk;
-            return new Tuple<decimal, decimal>(ethbtc, ethbtc);
+            var ethAsk = eth.Item2;
+            var xbtBid = xbt.Item1;
+            var ethbtcBid = ethAsk / xbtBid;
+
+            return new Tuple<decimal, decimal>(ethbtcBid, ethbtcAsk);
         }
 
         private static bool Validate(BidAsk bidAsk)

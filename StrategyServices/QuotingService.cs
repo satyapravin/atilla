@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ServiceCore;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Timers;
 
 namespace ExchangeCore
@@ -10,7 +11,8 @@ namespace ExchangeCore
     public class QuotingService : BaseTimerService, IQuotingService
     {
         #region private members
-        private volatile bool _set = false;
+        private int _threadSafeAskSet = 0;
+        private int _threadSafeBidSet = 0;
         private decimal _askQuantity = 0;
         private decimal _askSpreadFromMid = 0;
         private decimal _askPriceRef = 0;
@@ -30,7 +32,7 @@ namespace ExchangeCore
         
         #region public members
         public QuotingService(string sym, IMDS mds, IPMS pms, 
-                              IOMS oms, ILoggerFactory factory):base(_classname, 2000, factory)
+                              IOMS oms, ILoggerFactory factory):base(_classname, 4000, factory)
         {
             _symbol = sym;
             _mdsService = mds;
@@ -59,7 +61,7 @@ namespace ExchangeCore
 
         public void SetAskQuote(decimal askQty, decimal askPrice, decimal askSpread, decimal tickSize)
         {  
-            _set = false;
+            _AskSet = false;
             lock (_lock)
             {
                 _askQuantity = askQty;
@@ -68,12 +70,12 @@ namespace ExchangeCore
                 _tickSize = tickSize;
             }
 
-            _set = true;
+            _AskSet = true;
         }
 
         public void SetBidQuote(decimal bidQty, decimal bidPrice, decimal bidSpread, decimal tickSize)
         {
-            _set = false;
+            _BidSet = false;
             lock(_lock)
             {
                 _bidQuantity = bidQty;
@@ -81,6 +83,7 @@ namespace ExchangeCore
                 _bidSpreadFromMid = bidSpread;
                 _tickSize = tickSize;
             }
+            _BidSet = true;
         }
         #endregion
 
@@ -91,13 +94,13 @@ namespace ExchangeCore
         }
         protected override bool StopService()
         {
-            _set = false;
+            _AskSet = _BidSet = false;
             return base.StopService();
         }
 
         protected override void OnTimer()
         {
-            if (_set)
+            if (_BidSet || _AskSet)
             {
                 try
                 {
@@ -200,6 +203,26 @@ namespace ExchangeCore
         #endregion
 
         #region private members
+        private bool _AskSet
+        {
+            get { return (Interlocked.CompareExchange(ref _threadSafeAskSet, 1, 1) == 1); }
+            set
+            {
+                if (value) Interlocked.CompareExchange(ref _threadSafeAskSet, 1, 0);
+                else Interlocked.CompareExchange(ref _threadSafeAskSet, 0, 1);
+            }
+        }
+
+        private bool _BidSet
+        {
+            get { return (Interlocked.CompareExchange(ref _threadSafeBidSet, 1, 1) == 1); }
+            set
+            {
+                if (value) Interlocked.CompareExchange(ref _threadSafeBidSet, 1, 0);
+                else Interlocked.CompareExchange(ref _threadSafeBidSet, 0, 1);
+            }
+        }
+
         private void _omsService_Stopped(object sender, EventArgs e)
         {
             Stop();

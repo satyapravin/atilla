@@ -15,7 +15,6 @@ namespace AtillaCore
         private readonly IPMS _positionService;
         private readonly IMDS _marketDataService;
         private string _symbol;
-        private string _future;
         private decimal _targetPosition;
         private bool _basePositionPositive;
         private volatile bool _set = false;
@@ -27,13 +26,12 @@ namespace AtillaCore
         #endregion
 
         #region public members
-        public static Tuple<decimal, decimal> Hedge(string symbol, string future, IMDS mds, IPMS pms, IOMS oms,
+        public static Tuple<decimal, decimal> Hedge(string symbol, IMDS mds, IPMS pms, IOMS oms,
                                  decimal targetPos, decimal previousPosition, decimal previousTrade, 
                                  bool basePositive, ILogger logger)
         {
             
             var spotPosition = pms.GetPosition(symbol);
-            var futurePosition = pms.GetPosition(future);
 
             if (spotPosition == null || spotPosition.CurrentQty == 0)
             {
@@ -42,31 +40,17 @@ namespace AtillaCore
                 {
                     spotPosition = pms.QueryPositionFromExchange(symbol);
                 }
-                catch(Exception exc) { logger.LogError(exc, "Failed to fetch spot position"); }
-            }
-
-            if (futurePosition == null || futurePosition.CurrentQty == 0)
-            {
-                logger.LogError(string.Format("Future position not found, querying exchange for {0}", future));
-                try
-                {
-                    futurePosition = pms.QueryPositionFromExchange(future);
-                }
-                catch(Exception exc) { logger.LogError(exc, "Failed to fetch future position"); }
+                catch(Exception exc) { logger.LogError(exc, "Failed to fetch spot position"); return null;  }
             }
 
             var currSpotQty = 0m;
-            var currFutQty = 0m;
             if (spotPosition != null)
                 currSpotQty = spotPosition.CurrentQty;
 
-            if (futurePosition != null)
-                currFutQty = futurePosition.CurrentQty;
-
-            if (currSpotQty + currFutQty == previousPosition && previousTrade != 0)
+            if (currSpotQty == previousPosition && previousTrade != 0)
             {
-                logger.LogCritical("Position not updated. Previous position {p} equal new {n}", previousPosition, currSpotQty + currFutQty);
-                return new Tuple<decimal, decimal>(currSpotQty + currFutQty, 0);
+                logger.LogCritical("Position not updated. Previous position {p} equal new {n}", previousPosition, currSpotQty);
+                return new Tuple<decimal, decimal>(currSpotQty, 0);
             }
 
             if (targetPos == 0)
@@ -79,112 +63,33 @@ namespace AtillaCore
                     NewMarketOrder(symbol, -currSpotQty, oms);
                 }
 
-                if (currFutQty != 0)
-                {
-                    logger.LogInformation(string.Format("Closing {0} of {1}", currFutQty, future));
-                    NewMarketOrder(future, -currFutQty, oms);
-                }
-
-                return new Tuple<decimal, decimal>(currFutQty + currSpotQty, -currSpotQty - currFutQty);
+                return new Tuple<decimal, decimal>(currSpotQty, -currSpotQty);
             }
 
-            logger.LogInformation(string.Format("Current quantity {0}={1}, {2}={3}", symbol, currSpotQty, future, currFutQty));
+            logger.LogInformation(string.Format("Current quantity {0}={1}", symbol, currSpotQty));
             var spotP = mds.GetBidAsk(symbol);
-            var futP = mds.GetBidAsk(future);
 
             targetPos -= currSpotQty;
-            targetPos -= currFutQty;
-            logger.LogInformation(string.Format("Trade position={0} for {1}/{2}", targetPos, symbol, future));
+            logger.LogInformation(string.Format("Trade position={0} for {1}", targetPos, symbol));
 
             if (targetPos != 0)
             {
-                string tradeSymbol;
-
-                if (spotP.Item1 < futP.Item1)
-                {
-                    if (targetPos > 0)
-                    {
-                        if (basePositive)
-                        {
-                            tradeSymbol = symbol;
-                        }
-                        else if (Math.Abs(currSpotQty) < Math.Abs(currFutQty))
-                        {
-                            tradeSymbol = symbol;
-                        }
-                        else
-                        {
-                            tradeSymbol = future;
-                        }
-                    }
-                    else
-                    {
-                        if (!basePositive)
-                        {
-                            tradeSymbol = future;
-                        }
-                        else if (Math.Abs(currFutQty) < Math.Abs(currSpotQty))
-                        {
-                            tradeSymbol = future;
-                        }
-                        else
-                        {
-                            tradeSymbol = symbol;
-                        }
-                    }
-                }
-                else
-                {
-                    if (targetPos > 0)
-                    {
-                        if (basePositive)
-                        {
-                            tradeSymbol = future;
-                        }
-                        else if (Math.Abs(currFutQty) < Math.Abs(currSpotQty))
-                        {
-                            tradeSymbol = future;
-                        }
-                        else
-                        {
-                            tradeSymbol = symbol;
-                        }
-                    }
-                    else
-                    {
-                        if (!basePositive)
-                        {
-                            tradeSymbol = symbol;
-                        }
-                        else if (Math.Abs(currSpotQty) < Math.Abs(currFutQty))
-                        {
-                            tradeSymbol = symbol;
-                        }
-                        else
-                        {
-                            tradeSymbol = future;
-                        }
-                    }
-                }
-
-                logger.LogInformation(string.Format("Selected {0} for quantities {1}/{2} and prices {3}/{4}",
-                    tradeSymbol, currSpotQty, currFutQty, spotP.Item1, futP.Item1));
-                NewMarketOrder(tradeSymbol, targetPos, oms);
-                return new Tuple<decimal, decimal>(currSpotQty + currFutQty, targetPos);
+                logger.LogInformation(string.Format("Selected {0} for quantities {1} and prices {2}",
+                                       symbol, currSpotQty, spotP.Item1));
+                NewMarketOrder(symbol, targetPos, oms);
+                return new Tuple<decimal, decimal>(currSpotQty, targetPos);
             }
 
-            return new Tuple<decimal, decimal>(currFutQty + currSpotQty, 0);
+            return new Tuple<decimal, decimal>(currSpotQty, 0);
         }
 
         public HedgingService(string sym, 
-                              string fut,
                               IOMS ordSvc, 
                               IPMS posSvc, 
                               IMDS mdsSvc,
                               ILoggerFactory factory):base(_className, 5000, factory)
         {
             _symbol = sym;
-            _future = fut;
             _orderService = ordSvc;
             _positionService = posSvc;
             _marketDataService = mdsSvc;
@@ -213,8 +118,12 @@ namespace AtillaCore
                     prevTrade = _previousMarketOrderQuantity;
                 }
                 
-                var tuple = Hedge(_symbol, _future, _marketDataService, _positionService, _orderService, 
-                                   targetPos, prevPos, prevTrade, basePositive, _logger);                    
+                var tuple = Hedge(_symbol, _marketDataService, _positionService, _orderService, 
+                                   targetPos, prevPos, prevTrade, basePositive, _logger); 
+                if (tuple == null)
+                {
+                    return;
+                }
 
                 lock(_locker)
                 {

@@ -11,16 +11,6 @@
         "Code": "XBTUSD",
         "TickSize": 0.05
       },
-      "ETHFuture": {
-        "Name": "ETHFuture",
-        "Code": "ETHUSDU20",
-        "TickSize": 0.05
-      },
-      "BTCFuture": {
-        "Name": "BTCFuture",
-        "Code": "XBTU20",
-        "TickSize": 0.05
-      },
       "ETHBTCFuture": {
         "Name": "ETHBTCFuture",
         "Code": "ETHU20",
@@ -29,10 +19,10 @@
     }
   },
   "Bitmex": {
-    "Key": " jTfIG5ygm4WqAIgCr20VWyiN",
-    "Secret": "bfv8N7xYHv5d1qbAtlpRlHSMj_Ly7uFi8kn09Mh1mNz_t9rH",
+    "Key": "mB_LTtKGJWHD8CzNUhSXV4pr",
+    "Secret": "kNw1HYY92RqLtGFKrneWsdPrAd33B-5euY5ABDv6pf5Japop",
     "IsProd": true
   },
   "RebalanceInterval": 3600000.0,
-  "ETHBTCQuantity": 3.0
+  "ETHBTCQuantity": 6.0
 }
